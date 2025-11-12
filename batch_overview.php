@@ -54,8 +54,6 @@ if (!$res) {
 }
 
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
-require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
-require_once DOL_DOCUMENT_ROOT.'/core/class/html.formproduct.class.php';
 require_once __DIR__.'/lib/fvfiscal_data_service.class.php';
 require_once __DIR__.'/lib/fvfiscal_permissions.php';
 require_once __DIR__.'/lib/llist.class.php';
@@ -126,8 +124,6 @@ if (!empty($user->socid)) {
 }
 
 $form = new Form($db);
-$formCompany = new FormCompany($db);
-$formProduct = new FormProduct($db);
 $service = new FvFiscalDataService($db);
 
 $batchList = $service->fetchBatches($socidFilter, $productFilter);
@@ -349,11 +345,11 @@ print '<input type="hidden" name="token" value="'.$tokenFilter.'">';
 print '<div class="tagtable">';
 print '<div class="tagtr">';
 print '<div class="tagtd">'.$langs->trans('FvFiscalFilterPartner').'</div>';
-print '<div class="tagtd">'.$formCompany->selectCompanies($socidFilter, 'socid_filter', '', 1).'</div>';
+print '<div class="tagtd">'.$form->select_thirdparty_list($socidFilter, 'socid_filter', '', 1).'</div>';
 print '</div>';
 print '<div class="tagtr">';
 print '<div class="tagtd">'.$langs->trans('FvFiscalFilterProduct').'</div>';
-print '<div class="tagtd">'.$formProduct->select_produits($productFilter, 'productid_filter', '', 1).'</div>';
+print '<div class="tagtd">'.$form->select_produits($productFilter, 'productid_filter', '', 1).'</div>';
 print '</div>';
 print '</div>';
 print '<div class="center">';
