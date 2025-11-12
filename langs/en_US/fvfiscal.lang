@@ -5,47 +5,47 @@
 #
 
 # Module label 'ModuleFvFiscalName'
-ModuleFvFiscalName = FvFiscal
+ModuleFvFiscalName = Focus Fiscal
 # Module description 'ModuleFvFiscalDesc'
-ModuleFvFiscalDesc = FvFiscal description
+ModuleFvFiscalDesc = Automate Brazilian fiscal flows with Focus
 
 #
 # Admin page
 #
-FvFiscalSetup = FvFiscal setup
+FvFiscalSetup = Focus Fiscal setup
 Settings = Settings
-FvFiscalSetupPage = FvFiscal setup page
-NewSection=New section
-FVFISCAL_MYPARAM1 = My param 1
-FVFISCAL_MYPARAM1Tooltip = My param 1 tooltip
-FVFISCAL_MYPARAM2=My param 2
-FVFISCAL_MYPARAM2Tooltip=My param 2 tooltip
+FvFiscalSetupPage = Configure Focus Fiscal connectors
+NewSection=Focus Science credentials
+FVFISCAL_MYPARAM1 = Focus endpoint URL
+FVFISCAL_MYPARAM1Tooltip = Base URL for the Focus API used to dispatch batches and jobs
+FVFISCAL_MYPARAM2=Webhook shared secret
+FVFISCAL_MYPARAM2Tooltip=Secret token required to validate Focus callbacks
 
 
 #
 # About page
 #
 About = About
-FvFiscalAbout = About FvFiscal
-FvFiscalAboutPage = FvFiscal about page
+FvFiscalAbout = About Focus Fiscal
+FvFiscalAboutPage = Overview of the Focus Fiscal integration
 
 #
 # Sample page
 #
-FvFiscalArea = Home FvFiscal
-MyPageName = My page name
+FvFiscalArea = Focus Fiscal control center
+MyPageName = Dashboard
 
 #
 # Sample widget
 #
-MyWidget = My widget
-MyWidgetDescription = My widget description
+MyWidget = Focus Fiscal widget
+MyWidgetDescription = Monitor the latest fiscal batches processed by Focus
 FvFiscalInvalidToken = The security token is invalid. Please retry.
 FvFiscalFiltersApplied = Filters updated successfully.
 FvFiscalFiltersCleared = Filters were cleared.
-FvFiscalBatchNotFound = Batch not found for the current filters.
-FvFiscalBatchOverviewTitle = Fiscal batch control center
-FvFiscalBatchOverviewMenu = Batch overview
+FvFiscalBatchNotFound = No batch matches the current filters.
+FvFiscalBatchOverviewTitle = Fiscal automation cockpit
+FvFiscalBatchOverviewMenu = Focus batches overview
 FvFiscalFilterPartner = Partner profile
 FvFiscalFilterProduct = Product
 FvFiscalApplyFilters = Apply filters
@@ -59,18 +59,18 @@ FvFiscalNoBatchLines = No batch lines found.
 FvFiscalEventType = Event type
 FvFiscalNoBatchEvents = No batch events recorded.
 FvFiscalNoBatchJobs = No jobs were created for this batch.
-FvFiscalNoBatchDocuments = No documents linked to this batch.
+FvFiscalNoBatchDocuments = No fiscal documents linked to this batch.
 FvFiscalBatchDetailsTab = Batch details
 FvFiscalBatchType = Batch type
 FvFiscalRemoteId = Remote identifier
 FvFiscalSefazProfile = SEFAZ profile
 FvFiscalFocusJob = Focus job
-FvFiscalSettings = Settings
-FvFiscalBatchLinesTitle = Lines
-FvFiscalBatchJobsTitle = Jobs
-FvFiscalBatchEventsTitle = Events
-FvFiscalBatchDocumentsTitle = Fiscal documents
-FvFiscalSelectBatchHint = Select a batch from the list to display its details.
+FvFiscalSettings = Payload configuration
+FvFiscalBatchLinesTitle = Batch lines
+FvFiscalBatchJobsTitle = Focus jobs
+FvFiscalBatchEventsTitle = Focus events
+FvFiscalBatchDocumentsTitle = Fiscal documents (NF-e/MDF-e)
+FvFiscalSelectBatchHint = Select a batch from the list to inspect its homologation, dispatch and import progress.
 FvFiscalFocusInvalidAction = Unknown operation requested.
 FvFiscalFocusMissingParameter = Missing parameter: %s
 FvFiscalFocusInvalidPayload = Invalid payload data received.
@@ -82,4 +82,22 @@ FvFiscalFocusBatchNotFound = The requested batch could not be found.
 FvFiscalFocusLineNotFound = The requested batch line could not be found.
 FvFiscalFocusActionError = Focus gateway error: %s
 FvFiscalFocusScienceImport = Focus Science DF-e import
-FvFiscalFocusScienceImportDesc = Import DF-e documents from Focus Science into Dolibarr.
+FvFiscalFocusScienceImportDesc = Cron job that imports DF-e documents from Focus Science into Dolibarr.
+
+PartnerProfileRequired = A partner profile is required to create the batch.
+PartnerProfileNotFound = The selected partner profile could not be found.
+BatchTypeRequired = A batch type must be provided (emission, homologation, import or export).
+BatchLineTypeRequired = Each batch line must define a line type.
+BatchLineCreateFailed = Failed to create the batch line.
+BatchNotPersisted = Save the batch before continuing this operation.
+BatchLineNotPersisted = Save the batch line before continuing this operation.
+JobTypeRequired = A job type is required for the Focus dispatch.
+BatchNotFound = The batch informed in the request was not found.
+JobLineTypeRequired = Each job line must define a line type.
+JobLineCreateFailed = Failed to create the job line.
+FocusEndpointNotConfigured = Focus API endpoint is not configured. Review the module setup.
+BatchCreateFailed = Failed to create the batch on Dolibarr.
+BatchUpdateFailed = Failed to update the batch on Dolibarr.
+BatchEventCreateFailed = Failed to record the batch event on Dolibarr.
+JobCreateFailed = Failed to create the job on Dolibarr.
+FocusJobCreateFailed = Failed to register the Focus job for auditing purposes.
