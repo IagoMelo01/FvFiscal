@@ -313,37 +313,53 @@ class modFvFiscal extends DolibarrModules
 		// Add here entries to declare new menus
 		$menuPermission = '$user->hasRight(\'fvfiscal\', \'batch\', \'read\')';
 
-		$this->menu[$r++] = array(
-				'fk_menu' => '',
-				'type' => 'top',
-				'titre' => 'ModuleFvFiscalName',
-				'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle"'),
-				'mainmenu' => 'fvfiscal',
-				'leftmenu' => '',
-				'url' => '/fvfiscal/batch_overview.php',
-				'langs' => 'fvfiscal@fvfiscal',
-				'position' => 1000 + $r,
-				'enabled' => 'isModEnabled("fvfiscal")',
-				'perms' => $menuPermission,
-				'target' => '',
-				'user' => 2,
-		);
+                $this->menu[$r++] = array(
+                                'fk_menu' => '',
+                                'type' => 'top',
+                                'titre' => 'ModuleFvFiscalName',
+                                'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle"'),
+                                'mainmenu' => 'fvfiscal',
+                                'leftmenu' => '',
+                                'url' => '/fvfiscal/fvfiscalindex.php',
+                                'langs' => 'fvfiscal@fvfiscal',
+                                'position' => 1000 + $r,
+                                'enabled' => 'isModEnabled("fvfiscal")',
+                                'perms' => $menuPermission,
+                                'target' => '',
+                                'user' => 2,
+                );
 
-		$this->menu[$r++] = array(
-				'fk_menu' => 'fk_mainmenu=fvfiscal',
-				'type' => 'left',
-				'titre' => 'FvFiscalBatchOverviewMenu',
-				'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle paddingright"'),
-				'mainmenu' => 'fvfiscal',
-				'leftmenu' => 'fvfiscal_overview',
-				'url' => '/fvfiscal/batch_overview.php',
-				'langs' => 'fvfiscal@fvfiscal',
-				'position' => 1000 + $r,
-				'enabled' => 'isModEnabled("fvfiscal")',
-				'perms' => $menuPermission,
-				'target' => '',
-				'user' => 2,
-		);
+                $this->menu[$r++] = array(
+                                'fk_menu' => 'fk_mainmenu=fvfiscal',
+                                'type' => 'left',
+                                'titre' => 'FvFiscalNfeOutMenu',
+                                'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle paddingright"'),
+                                'mainmenu' => 'fvfiscal',
+                                'leftmenu' => 'fvfiscal_nfeout',
+                                'url' => '/fvfiscal/fvfiscalindex.php',
+                                'langs' => 'fvfiscal@fvfiscal',
+                                'position' => 1000 + $r,
+                                'enabled' => 'isModEnabled("fvfiscal")',
+                                'perms' => $menuPermission,
+                                'target' => '',
+                                'user' => 2,
+                );
+
+                $this->menu[$r++] = array(
+                                'fk_menu' => 'fk_mainmenu=fvfiscal',
+                                'type' => 'left',
+                                'titre' => 'FvFiscalBatchOverviewMenu',
+                                'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle paddingright"'),
+                                'mainmenu' => 'fvfiscal',
+                                'leftmenu' => 'fvfiscal_overview',
+                                'url' => '/fvfiscal/batch_overview.php',
+                                'langs' => 'fvfiscal@fvfiscal',
+                                'position' => 1000 + $r,
+                                'enabled' => 'isModEnabled("fvfiscal")',
+                                'perms' => $menuPermission,
+                                'target' => '',
+                                'user' => 2,
+                );
 		// Exports profiles provided by this module
 		$r = 0;
 		/* BEGIN MODULEBUILDER EXPORT MYOBJECT */

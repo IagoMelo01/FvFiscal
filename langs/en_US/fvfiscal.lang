@@ -101,3 +101,19 @@ BatchUpdateFailed = Failed to update the batch on Dolibarr.
 BatchEventCreateFailed = Failed to record the batch event on Dolibarr.
 JobCreateFailed = Failed to create the job on Dolibarr.
 FocusJobCreateFailed = Failed to register the Focus job for auditing purposes.
+
+# NF-e outbound list
+FvFiscalNfeOutListTitle = Outbound NF-e documents
+FvFiscalNfeOutNumber = Document number
+FvFiscalNfeOutRecipient = Recipient
+FvFiscalNfeOutStatusPending = Pending
+FvFiscalNfeOutStatusProcessing = Processing
+FvFiscalNfeOutStatusAuthorized = Authorized
+FvFiscalNfeOutStatusError = Error
+FvFiscalNfeOutStatusCancelled = Cancelled
+FvFiscalNfeOutSummaryAuthorized = Authorized
+FvFiscalNfeOutSummaryCancelled = Cancelled
+FvFiscalNfeOutSummaryPending = Pending
+FvFiscalNfeOutSearchPlaceholder = Search customer or NF-e key
+FvFiscalNfeOutEmpty = No NF-e documents match the selected filters.
+FvFiscalNfeOutMenu = Notas Fiscais
