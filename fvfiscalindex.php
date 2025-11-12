@@ -4,7 +4,7 @@
  * Copyright (C) 2005-2012  Regis Houssin           <regis.houssin@inodbox.com>
  * Copyright (C) 2015       Jean-François Ferry     <jfefe@aternatik.fr>
  * Copyright (C) 2024       Frédéric France         <frederic.france@free.fr>
- * Copyright (C) 2025		SuperAdmin
+ * Copyright (C) 2025           SuperAdmin
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,248 +21,274 @@
  */
 
 /**
- *	\file       fvfiscal/fvfiscalindex.php
- *	\ingroup    fvfiscal
- *	\brief      Home page of fvfiscal top menu
+ *      \file       fvfiscal/fvfiscalindex.php
+ *      \ingroup    fvfiscal
+ *      \brief      NF-e list page for outbound documents
  */
 
 // Load Dolibarr environment
 $res = 0;
-// Try main.inc.php into web root known defined into CONTEXT_DOCUMENT_ROOT (not always defined)
-if (!$res && !empty($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-	$res = @include $_SERVER["CONTEXT_DOCUMENT_ROOT"]."/main.inc.php";
+if (!$res && !empty($_SERVER['CONTEXT_DOCUMENT_ROOT'])) {
+    $res = @include $_SERVER['CONTEXT_DOCUMENT_ROOT'].'/main.inc.php';
 }
-// Try main.inc.php into web root detected using web root calculated from SCRIPT_FILENAME
 $tmp = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
 $tmp2 = realpath(__FILE__);
 $i = strlen($tmp) - 1;
 $j = strlen($tmp2) - 1;
 while ($i > 0 && $j > 0 && isset($tmp[$i]) && isset($tmp2[$j]) && $tmp[$i] == $tmp2[$j]) {
-	$i--;
-	$j--;
+    $i--;
+    $j--;
 }
-if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1))."/main.inc.php")) {
-	$res = @include substr($tmp, 0, ($i + 1))."/main.inc.php";
+if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1)).'/main.inc.php')) {
+    $res = @include substr($tmp, 0, ($i + 1)).'/main.inc.php';
 }
-if (!$res && $i > 0 && file_exists(dirname(substr($tmp, 0, ($i + 1)))."/main.inc.php")) {
-	$res = @include dirname(substr($tmp, 0, ($i + 1)))."/main.inc.php";
+if (!$res && $i > 0 && file_exists(dirname(substr($tmp, 0, ($i + 1))).'/main.inc.php')) {
+    $res = @include dirname(substr($tmp, 0, ($i + 1))).'/main.inc.php';
 }
-// Try main.inc.php using relative path
-if (!$res && file_exists("../main.inc.php")) {
-	$res = @include "../main.inc.php";
+if (!$res && file_exists('../main.inc.php')) {
+    $res = @include '../main.inc.php';
 }
-if (!$res && file_exists("../../main.inc.php")) {
-	$res = @include "../../main.inc.php";
+if (!$res && file_exists('../../main.inc.php')) {
+    $res = @include '../../main.inc.php';
 }
-if (!$res && file_exists("../../../main.inc.php")) {
-	$res = @include "../../../main.inc.php";
+if (!$res && file_exists('../../../main.inc.php')) {
+    $res = @include '../../../main.inc.php';
 }
 if (!$res) {
-	die("Include of main fails");
+    die('Include of main fails');
 }
 
-require_once DOL_DOCUMENT_ROOT.'/core/class/html.formfile.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/date.lib.php';
+require_once __DIR__.'/class/FvNfeOut.class.php';
 require_once __DIR__.'/lib/fvfiscal_permissions.php';
 
-/**
- * @var Conf $conf
- * @var DoliDB $db
- * @var HookManager $hookmanager
- * @var Translate $langs
- * @var User $user
- */
+/** @var DoliDB $db */
+/** @var Translate $langs */
+/** @var User $user */
+/** @var Conf $conf */
 
 // Load translation files required by the page
-$langs->loadLangs(array("fvfiscal@fvfiscal"));
+$langs->loadLangs(array('fvfiscal@fvfiscal', 'companies'));
 
 $action = GETPOST('action', 'aZ09');
-
-$now = dol_now();
-$max = getDolGlobalInt('MAIN_SIZE_SHORTLIST_LIMIT', 5);
 
 // Security check - Protection if external user
 $socid = GETPOSTINT('socid');
 if (!empty($user->socid) && $user->socid > 0) {
-	$action = '';
-	$socid = $user->socid;
+    $action = '';
+    $socid = $user->socid;
 }
 
-// Initialize a technical object to manage hooks. Note that conf->hooks_modules contains array
-//$hookmanager->initHooks(array($object->element.'index'));
-
-// Security check (enable the most restrictive one)
-//if ($user->socid > 0) accessforbidden();
-//if ($user->socid > 0) $socid = $user->socid;
-//if (!isModEnabled('fvfiscal')) {
-//	accessforbidden('Module not enabled');
-//}
-//if (!$user->hasRight(FvFiscalPermissions::MODULE, FvFiscalPermissions::BATCH, FvFiscalPermissions::BATCH_READ)) {
-//	accessforbidden();
-//}
-//restrictedArea($user, 'fvfiscal', 0, 'fvfiscal_myobject', 'myobject', '', 'rowid');
-//if (empty($user->admin)) {
-//	accessforbidden('Must be admin');
-//}
-
-
-/*
- * Actions
- */
-
-// None
-
-
-/*
- * View
- */
+if (empty($conf->fvfiscal->enabled)) {
+    accessforbidden();
+}
+if (!$user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_READ
+)) {
+    accessforbidden();
+}
 
 $form = new Form($db);
-$formfile = new FormFile($db);
 
-llxHeader("", $langs->trans("FvFiscalArea"), '', '', 0, 0, '', '', '', 'mod-fvfiscal page-index');
-
-print load_fiche_titre($langs->trans("FvFiscalArea"), '', 'fvfiscal.png@fvfiscal');
-
-print '<div class="fichecenter"><div class="fichethirdleft">';
-
-
-/* BEGIN MODULEBUILDER DRAFT MYOBJECT
-// Draft MyObject
-if (isModEnabled('fvfiscal') && $user->hasRight(
-    FvFiscalPermissions::MODULE,
-    FvFiscalPermissions::BATCH,
-    FvFiscalPermissions::BATCH_READ
-)) {
-	$langs->load("orders");
-
-	$sql = "SELECT c.rowid, c.ref, c.ref_client, c.total_ht, c.tva as total_tva, c.total_ttc, s.rowid as socid, s.nom as name, s.client, s.canvas";
-	$sql.= ", s.code_client";
-	$sql.= " FROM ".MAIN_DB_PREFIX."commande as c";
-	$sql.= ", ".MAIN_DB_PREFIX."societe as s";
-	$sql.= " WHERE c.fk_soc = s.rowid";
-	$sql.= " AND c.fk_statut = 0";
-	$sql.= " AND c.entity IN (".getEntity('commande').")";
-	if ($socid)	$sql.= " AND c.fk_soc = ".((int) $socid);
-
-	$resql = $db->query($sql);
-	if ($resql)
-	{
-		$total = 0;
-		$num = $db->num_rows($resql);
-
-		print '<table class="noborder centpercent">';
-		print '<tr class="liste_titre">';
-		print '<th colspan="3">'.$langs->trans("DraftMyObjects").($num?'<span class="badge marginleftonlyshort">'.$num.'</span>':'').'</th></tr>';
-
-		$var = true;
-		if ($num > 0)
-		{
-			$i = 0;
-			while ($i < $num)
-			{
-
-				$obj = $db->fetch_object($resql);
-				print '<tr class="oddeven"><td class="nowrap">';
-
-				$myobjectstatic->id=$obj->rowid;
-				$myobjectstatic->ref=$obj->ref;
-				$myobjectstatic->ref_client=$obj->ref_client;
-				$myobjectstatic->total_ht = $obj->total_ht;
-				$myobjectstatic->total_tva = $obj->total_tva;
-				$myobjectstatic->total_ttc = $obj->total_ttc;
-
-				print $myobjectstatic->getNomUrl(1);
-				print '</td>';
-				print '<td class="nowrap">';
-				print '</td>';
-				print '<td class="right" class="nowrap">'.price($obj->total_ttc).'</td></tr>';
-				$i++;
-				$total += $obj->total_ttc;
-			}
-			if ($total>0)
-			{
-
-				print '<tr class="liste_total"><td>'.$langs->trans("Total").'</td><td colspan="2" class="right">'.price($total)."</td></tr>";
-			}
-		}
-		else
-		{
-
-			print '<tr class="oddeven"><td colspan="3" class="opacitymedium">'.$langs->trans("NoOrder").'</td></tr>';
-		}
-		print "</table><br>";
-
-		$db->free($resql);
-	}
-	else
-	{
-		dol_print_error($db);
-	}
+$limit = GETPOSTINT('limit');
+if ($limit <= 0) {
+    $limit = empty($conf->liste_limit) ? 25 : (int) $conf->liste_limit;
 }
-END MODULEBUILDER DRAFT MYOBJECT */
 
-
-print '</div><div class="fichetwothirdright">';
-
-
-/* BEGIN MODULEBUILDER LASTMODIFIED MYOBJECT
-// Last modified myobject
-if (isModEnabled('fvfiscal') && $user->hasRight(
-    FvFiscalPermissions::MODULE,
-    FvFiscalPermissions::BATCH,
-    FvFiscalPermissions::BATCH_READ
-)) {
-	$sql = "SELECT s.rowid, s.ref, s.label, s.date_creation, s.tms";
-	$sql.= " FROM ".MAIN_DB_PREFIX."fvfiscal_myobject as s";
-	$sql.= " WHERE s.entity IN (".getEntity($myobjectstatic->element).")";
-	//if ($socid)	$sql.= " AND s.rowid = $socid";
-	$sql .= " ORDER BY s.tms DESC";
-	$sql .= $db->plimit($max, 0);
-
-	$resql = $db->query($sql);
-	if ($resql)
-	{
-		$num = $db->num_rows($resql);
-		$i = 0;
-
-		print '<table class="noborder centpercent">';
-		print '<tr class="liste_titre">';
-		print '<th colspan="2">';
-		print $langs->trans("BoxTitleLatestModifiedMyObjects", $max);
-		print '</th>';
-		print '<th class="right">'.$langs->trans("DateModificationShort").'</th>';
-		print '</tr>';
-		if ($num)
-		{
-			while ($i < $num)
-			{
-				$objp = $db->fetch_object($resql);
-
-				$myobjectstatic->id=$objp->rowid;
-				$myobjectstatic->ref=$objp->ref;
-				$myobjectstatic->label=$objp->label;
-				$myobjectstatic->status = $objp->status;
-
-				print '<tr class="oddeven">';
-				print '<td class="nowrap">'.$myobjectstatic->getNomUrl(1).'</td>';
-				print '<td class="right nowrap">';
-				print "</td>";
-				print '<td class="right nowrap">'.dol_print_date($db->jdate($objp->tms), 'day')."</td>";
-				print '</tr>';
-				$i++;
-			}
-
-			$db->free($resql);
-		} else {
-			print '<tr class="oddeven"><td colspan="3" class="opacitymedium">'.$langs->trans("None").'</td></tr>';
-		}
-		print "</table><br>";
-	}
+$page = (int) GETPOSTINT('page');
+if ($page < 0) {
+    $page = 0;
 }
-*/
+$offset = $limit * $page;
 
-print '</div></div>';
+$sortfield = GETPOST('sortfield', 'alphanohtml');
+$allowedSortFields = array(
+    'o.ref',
+    'o.document_number',
+    'o.series',
+    'customer_name',
+    'o.issue_at',
+    'o.total_amount',
+    'o.status',
+);
+if (!in_array($sortfield, $allowedSortFields, true)) {
+    $sortfield = 'o.issue_at';
+}
+$sortfieldSql = ($sortfield === 'customer_name') ? 's.nom' : $sortfield;
 
-// End of page
+$sortorder = strtoupper(GETPOST('sortorder', 'alpha'));
+if ($sortorder !== 'ASC') {
+    $sortorder = 'DESC';
+}
+
+$searchTerm = trim(GETPOST('search', 'alphanohtml'));
+
+$statusRaw = GETPOST('status', 'alphanohtml');
+$statusFilter = null;
+if ($statusRaw !== '') {
+    $statusFilter = (int) $statusRaw;
+}
+
+$dateStartInput = GETPOST('date_start', 'alphanohtml');
+$dateEndInput = GETPOST('date_end', 'alphanohtml');
+
+$dateStart = null;
+if ($dateStartInput !== '' && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dateStartInput, $matchesStart)) {
+    $dateStart = dol_mktime(0, 0, 0, (int) $matchesStart[2], (int) $matchesStart[3], (int) $matchesStart[1]);
+}
+
+$dateEnd = null;
+if ($dateEndInput !== '' && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dateEndInput, $matchesEnd)) {
+    $dateEnd = dol_mktime(23, 59, 59, (int) $matchesEnd[2], (int) $matchesEnd[3], (int) $matchesEnd[1]);
+}
+
+$sqlFrom = ' FROM ' . MAIN_DB_PREFIX . "fv_nfe_out as o";
+$sqlFrom .= ' LEFT JOIN ' . MAIN_DB_PREFIX . "societe as s ON s.rowid = o.fk_soc";
+
+$where = array();
+$where[] = 'o.entity IN (' . getEntity('fv_nfe_out') . ')';
+if (!empty($socid)) {
+    $where[] = 'o.fk_soc = ' . ((int) $socid);
+}
+if ($statusFilter !== null) {
+    $where[] = 'o.status = ' . ((int) $statusFilter);
+}
+if ($dateStart !== null) {
+    $where[] = "o.issue_at >= '" . $db->idate($dateStart) . "'";
+}
+if ($dateEnd !== null) {
+    $where[] = "o.issue_at <= '" . $db->idate($dateEnd) . "'";
+}
+if ($searchTerm !== '') {
+    $searchEscaped = $db->escape($searchTerm);
+    $where[] = "(o.nfe_key LIKE '%" . $searchEscaped . "%'"
+        . " OR o.ref LIKE '%" . $searchEscaped . "%'"
+        . " OR o.document_number LIKE '%" . $searchEscaped . "%'"
+        . " OR s.nom LIKE '%" . $searchEscaped . "%')";
+}
+
+$sqlWhere = ' WHERE ' . implode(' AND ', $where);
+
+$sqlCount = 'SELECT COUNT(*) as total' . $sqlFrom . $sqlWhere;
+$resql = $db->query($sqlCount);
+$totalRecords = 0;
+if ($resql) {
+    $obj = $db->fetch_object($resql);
+    if ($obj) {
+        $totalRecords = (int) $obj->total;
+    }
+    $db->free($resql);
+} else {
+    setEventMessages($db->lasterror(), null, 'errors');
+}
+
+$sqlSummary = 'SELECT o.status, COUNT(*) as doc_count, SUM(o.total_amount) as doc_total'
+    . $sqlFrom . $sqlWhere . ' GROUP BY o.status';
+$resqlSummary = $db->query($sqlSummary);
+$summaryByStatus = array();
+if ($resqlSummary) {
+    while ($summaryRow = $db->fetch_object($resqlSummary)) {
+        $statusKey = (int) $summaryRow->status;
+        $summaryByStatus[$statusKey] = array(
+            'count' => (int) $summaryRow->doc_count,
+            'amount' => (float) ($summaryRow->doc_total ?: 0),
+        );
+    }
+    $db->free($resqlSummary);
+} elseif ($db->lasterror()) {
+    setEventMessages($db->lasterror(), null, 'errors');
+}
+
+$summary = array(
+    'authorized' => array('label' => $langs->trans('FvFiscalNfeOutSummaryAuthorized'), 'count' => 0, 'amount' => 0.0),
+    'cancelled' => array('label' => $langs->trans('FvFiscalNfeOutSummaryCancelled'), 'count' => 0, 'amount' => 0.0),
+    'pending' => array('label' => $langs->trans('FvFiscalNfeOutSummaryPending'), 'count' => 0, 'amount' => 0.0),
+);
+
+if (!empty($summaryByStatus[2])) {
+    $summary['authorized']['count'] = $summaryByStatus[2]['count'];
+    $summary['authorized']['amount'] = $summaryByStatus[2]['amount'];
+}
+if (!empty($summaryByStatus[4])) {
+    $summary['cancelled']['count'] = $summaryByStatus[4]['count'];
+    $summary['cancelled']['amount'] = $summaryByStatus[4]['amount'];
+}
+$pendingStatuses = array(0, 1);
+foreach ($pendingStatuses as $pendingStatus) {
+    if (!empty($summaryByStatus[$pendingStatus])) {
+        $summary['pending']['count'] += $summaryByStatus[$pendingStatus]['count'];
+        $summary['pending']['amount'] += $summaryByStatus[$pendingStatus]['amount'];
+    }
+}
+
+$sqlSelect = 'SELECT o.rowid, o.ref, o.document_number, o.series, o.nfe_key, o.issue_at, o.total_amount, o.status, s.nom as customer_name'
+    . $sqlFrom . $sqlWhere;
+$sqlSelect .= ' ORDER BY ' . $sortfieldSql . ' ' . $sortorder;
+$sqlSelect .= $db->plimit($limit, $offset);
+
+$records = array();
+$resql = $db->query($sqlSelect);
+$num = 0;
+if ($resql) {
+    $num = $db->num_rows($resql);
+    while ($obj = $db->fetch_object($resql)) {
+        $records[] = array(
+            'id' => (int) $obj->rowid,
+            'ref' => $obj->ref,
+            'document_number' => $obj->document_number,
+            'series' => $obj->series,
+            'nfe_key' => $obj->nfe_key,
+            'issue_at' => $db->jdate($obj->issue_at),
+            'total_amount' => (float) $obj->total_amount,
+            'status' => (int) $obj->status,
+            'customer_name' => $obj->customer_name,
+        );
+    }
+    $db->free($resql);
+} else {
+    setEventMessages($db->lasterror(), null, 'errors');
+}
+
+$statusLabels = array(
+    0 => $langs->trans('FvFiscalNfeOutStatusPending'),
+    1 => $langs->trans('FvFiscalNfeOutStatusProcessing'),
+    2 => $langs->trans('FvFiscalNfeOutStatusAuthorized'),
+    3 => $langs->trans('FvFiscalNfeOutStatusError'),
+    4 => $langs->trans('FvFiscalNfeOutStatusCancelled'),
+);
+
+$paramParts = array();
+if ($statusFilter !== null) {
+    $paramParts[] = 'status=' . urlencode((string) $statusFilter);
+}
+if ($dateStartInput !== '') {
+    $paramParts[] = 'date_start=' . urlencode($dateStartInput);
+}
+if ($dateEndInput !== '') {
+    $paramParts[] = 'date_end=' . urlencode($dateEndInput);
+}
+if ($searchTerm !== '') {
+    $paramParts[] = 'search=' . urlencode($searchTerm);
+}
+if ($limit !== (empty($conf->liste_limit) ? 25 : (int) $conf->liste_limit)) {
+    $paramParts[] = 'limit=' . urlencode((string) $limit);
+}
+if (!empty($socid)) {
+    $paramParts[] = 'socid=' . urlencode((string) $socid);
+}
+$param = implode('&', $paramParts);
+
+$nfeOutStatic = new FvNfeOut($db);
+
+llxHeader('', $langs->trans('FvFiscalNfeOutListTitle'), '', '', 0, 0, '', '', '', 'mod-fvfiscal page-index');
+
+$templateFile = __DIR__ . '/tpl/nfeout_list.tpl.php';
+if (file_exists($templateFile)) {
+    include $templateFile;
+}
+
 llxFooter();
 $db->close();
