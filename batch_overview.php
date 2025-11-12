@@ -57,6 +57,7 @@ require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formproduct.class.php';
 require_once __DIR__.'/lib/fvfiscal_data_service.class.php';
+require_once __DIR__.'/lib/fvfiscal_permissions.php';
 require_once __DIR__.'/lib/llist.class.php';
 require_once __DIR__.'/lib/fvfiscal_helpers.php';
 
@@ -70,7 +71,11 @@ $langs->loadLangs(array('fvfiscal@fvfiscal', 'companies', 'products'));
 if (empty($conf->fvfiscal->enabled)) {
     accessforbidden();
 }
-if (!$user->hasRight('fvfiscal', 'myobject', 'read')) {
+if (!$user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_READ
+)) {
     accessforbidden();
 }
 

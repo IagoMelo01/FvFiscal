@@ -53,6 +53,7 @@ if (!$res) {
 
 require_once __DIR__.'/lib/fvfiscal_focus.lib.php';
 require_once __DIR__.'/lib/fvfiscal_helpers.php';
+require_once __DIR__.'/lib/fvfiscal_permissions.php';
 require_once __DIR__.'/class/FvBatch.class.php';
 require_once __DIR__.'/class/FvBatchEvent.class.php';
 require_once __DIR__.'/class/FvBatchLine.class.php';
@@ -68,7 +69,11 @@ $langs->loadLangs(array('fvfiscal@fvfiscal'));
 if (empty($conf->fvfiscal->enabled)) {
     accessforbidden();
 }
-if (!$user->hasRight('fvfiscal', 'myobject', 'write')) {
+if (!$user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_WRITE
+)) {
     accessforbidden();
 }
 

@@ -62,6 +62,7 @@ if (!$res) {
 }
 
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formfile.class.php';
+require_once __DIR__.'/lib/fvfiscal_permissions.php';
 
 /**
  * @var Conf $conf
@@ -95,7 +96,7 @@ if (!empty($user->socid) && $user->socid > 0) {
 //if (!isModEnabled('fvfiscal')) {
 //	accessforbidden('Module not enabled');
 //}
-//if (! $user->hasRight('fvfiscal', 'myobject', 'read')) {
+//if (!$user->hasRight(FvFiscalPermissions::MODULE, FvFiscalPermissions::BATCH, FvFiscalPermissions::BATCH_READ)) {
 //	accessforbidden();
 //}
 //restrictedArea($user, 'fvfiscal', 0, 'fvfiscal_myobject', 'myobject', '', 'rowid');
@@ -127,7 +128,11 @@ print '<div class="fichecenter"><div class="fichethirdleft">';
 
 /* BEGIN MODULEBUILDER DRAFT MYOBJECT
 // Draft MyObject
-if (isModEnabled('fvfiscal') && $user->hasRight('fvfiscal', 'read')) {
+if (isModEnabled('fvfiscal') && $user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_READ
+)) {
 	$langs->load("orders");
 
 	$sql = "SELECT c.rowid, c.ref, c.ref_client, c.total_ht, c.tva as total_tva, c.total_ttc, s.rowid as socid, s.nom as name, s.client, s.canvas";
@@ -202,7 +207,11 @@ print '</div><div class="fichetwothirdright">';
 
 /* BEGIN MODULEBUILDER LASTMODIFIED MYOBJECT
 // Last modified myobject
-if (isModEnabled('fvfiscal') && $user->hasRight('fvfiscal', 'read')) {
+if (isModEnabled('fvfiscal') && $user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_READ
+)) {
 	$sql = "SELECT s.rowid, s.ref, s.label, s.date_creation, s.tms";
 	$sql.= " FROM ".MAIN_DB_PREFIX."fvfiscal_myobject as s";
 	$sql.= " WHERE s.entity IN (".getEntity($myobjectstatic->element).")";
