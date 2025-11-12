@@ -80,3 +80,5 @@ FvFiscalFocusJobCreated = Job created successfully.
 FvFiscalFocusBatchNotFound = The requested batch could not be found.
 FvFiscalFocusLineNotFound = The requested batch line could not be found.
 FvFiscalFocusActionError = Focus gateway error: %s
+FvFiscalFocusScienceImport = Focus Science DF-e import
+FvFiscalFocusScienceImportDesc = Import DF-e documents from Focus Science into Dolibarr.

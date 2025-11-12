@@ -41,12 +41,14 @@ class FvFocusJob extends CommonObject
         'fk_user_modif' => array('type' => 'integer', 'label' => 'UserModif', 'enabled' => 1, 'visible' => -1, 'position' => 506, 'foreignkey' => 'user.rowid'),
     );
 
-    public function create($user, $notrigger = false)
+    public function create($user = null, $notrigger = false)
     {
         if (empty($this->created_at)) {
             $this->created_at = dol_now();
         }
-        $this->fk_user_create = $user->id;
+        if ($user) {
+            $this->fk_user_create = $user->id;
+        }
 
         return $this->createCommon($user, $notrigger);
     }
