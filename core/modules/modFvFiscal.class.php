@@ -265,22 +265,22 @@ class modFvFiscal extends DolibarrModules
 		// Cronjobs (List of cron jobs entries to add when module is enabled)
 		// unit_frequency must be 60 for minute, 3600 for hour, 86400 for day, 604800 for week
 		/* BEGIN MODULEBUILDER CRON */
-		$this->cronjobs = array(
-			//  0 => array(
-			//      'label' => 'MyJob label',
-			//      'jobtype' => 'method',
-			//      'class' => '/fvfiscal/class/myobject.class.php',
-			//      'objectname' => 'MyObject',
-			//      'method' => 'doScheduledJob',
-			//      'parameters' => '',
-			//      'comment' => 'Comment',
-			//      'frequency' => 2,
-			//      'unitfrequency' => 3600,
-			//      'status' => 0,
-			//      'test' => 'isModEnabled("fvfiscal")',
-			//      'priority' => 50,
-			//  ),
-		);
+                $this->cronjobs = array(
+                        0 => array(
+                                'label' => 'FvFiscalFocusScienceImport',
+                                'jobtype' => 'method',
+                                'class' => '/fvfiscal/lib/fvfiscal_import_service.class.php',
+                                'objectname' => 'FvFiscalScienceImporter',
+                                'method' => 'run',
+                                'parameters' => '',
+                                'comment' => 'FvFiscalFocusScienceImportDesc',
+                                'frequency' => 1,
+                                'unitfrequency' => 3600,
+                                'status' => 0,
+                                'test' => 'isModEnabled("fvfiscal")',
+                                'priority' => 50,
+                        ),
+                );
 		/* END MODULEBUILDER CRON */
 		// Example: $this->cronjobs=array(
 		//    0=>array('label'=>'My label', 'jobtype'=>'method', 'class'=>'/dir/class/file.class.php', 'objectname'=>'MyClass', 'method'=>'myMethod', 'parameters'=>'param1, param2', 'comment'=>'Comment', 'frequency'=>2, 'unitfrequency'=>3600, 'status'=>0, 'test'=>'isModEnabled("fvfiscal")', 'priority'=>50),
