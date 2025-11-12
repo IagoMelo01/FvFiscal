@@ -45,6 +45,7 @@ FvFiscalFiltersApplied = Filters updated successfully.
 FvFiscalFiltersCleared = Filters were cleared.
 FvFiscalBatchNotFound = Batch not found for the current filters.
 FvFiscalBatchOverviewTitle = Fiscal batch control center
+FvFiscalBatchOverviewMenu = Batch overview
 FvFiscalFilterPartner = Partner profile
 FvFiscalFilterProduct = Product
 FvFiscalApplyFilters = Apply filters

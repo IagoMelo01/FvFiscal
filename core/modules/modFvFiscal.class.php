@@ -27,6 +27,7 @@
  *  \brief      Description and activation file for module FvFiscal
  */
 include_once DOL_DOCUMENT_ROOT.'/core/modules/DolibarrModules.class.php';
+require_once __DIR__.'/../../lib/fvfiscal_permissions.php';
 
 
 /**
@@ -291,102 +292,58 @@ class modFvFiscal extends DolibarrModules
 		$this->rights = array();
 		$r = 0;
 		// Add here entries to declare new permissions
-		/* BEGIN MODULEBUILDER PERMISSIONS */
-		/*
-		$o = 1;
-		$this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 1); // Permission id (must not be already used)
-		$this->rights[$r][1] = 'Read objects of FvFiscal'; // Permission label
-		$this->rights[$r][4] = 'myobject';
-		$this->rights[$r][5] = 'read'; // In php code, permission will be checked by test if ($user->hasRight('fvfiscal', 'myobject', 'read'))
-		$r++;
-		$this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 2); // Permission id (must not be already used)
-		$this->rights[$r][1] = 'Create/Update objects of FvFiscal'; // Permission label
-		$this->rights[$r][4] = 'myobject';
-		$this->rights[$r][5] = 'write'; // In php code, permission will be checked by test if ($user->hasRight('fvfiscal', 'myobject', 'write'))
-		$r++;
-		$this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 3); // Permission id (must not be already used)
-		$this->rights[$r][1] = 'Delete objects of FvFiscal'; // Permission label
-		$this->rights[$r][4] = 'myobject';
-		$this->rights[$r][5] = 'delete'; // In php code, permission will be checked by test if ($user->hasRight('fvfiscal', 'myobject', 'delete'))
-		$r++;
-		*/
-		/* END MODULEBUILDER PERMISSIONS */
+               $o = 1;
+
+               $this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 1);
+               $this->rights[$r][1] = 'Read Focus batches';
+               $this->rights[$r][4] = FvFiscalPermissions::BATCH;
+               $this->rights[$r][5] = FvFiscalPermissions::BATCH_READ;
+               $r++;
+
+               $this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 2);
+               $this->rights[$r][1] = 'Manage Focus batches';
+               $this->rights[$r][4] = FvFiscalPermissions::BATCH;
+               $this->rights[$r][5] = FvFiscalPermissions::BATCH_WRITE;
+               $r++;
 
 
 		// Main menu entries to add
 		$this->menu = array();
 		$r = 0;
 		// Add here entries to declare new menus
-		/* BEGIN MODULEBUILDER TOPMENU */
+		$menuPermission = '$user->hasRight(\'fvfiscal\', \'batch\', \'read\')';
+
 		$this->menu[$r++] = array(
-			'fk_menu' => '', // Will be stored into mainmenu + leftmenu. Use '' if this is a top menu. For left menu, use 'fk_mainmenu=xxx' or 'fk_mainmenu=xxx,fk_leftmenu=yyy' where xxx is mainmenucode and yyy is a leftmenucode
-			'type' => 'top', // This is a Top menu entry
-			'titre' => 'ModuleFvFiscalName',
-			'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle"'),
-			'mainmenu' => 'fvfiscal',
-			'leftmenu' => '',
-			'url' => '/fvfiscal/fvfiscalindex.php',
-			'langs' => 'fvfiscal@fvfiscal', // Lang file to use (without .lang) by module. File must be in langs/code_CODE/ directory.
-			'position' => 1000 + $r,
-			'enabled' => 'isModEnabled("fvfiscal")', // Define condition to show or hide menu entry. Use 'isModEnabled("fvfiscal")' if entry must be visible if module is enabled.
-			'perms' => '1', // Use 'perms'=>'$user->hasRight("fvfiscal", "myobject", "read")' if you want your menu with a permission rules
-			'target' => '',
-			'user' => 2, // 0=Menu for internal users, 1=external users, 2=both
+				'fk_menu' => '',
+				'type' => 'top',
+				'titre' => 'ModuleFvFiscalName',
+				'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle"'),
+				'mainmenu' => 'fvfiscal',
+				'leftmenu' => '',
+				'url' => '/fvfiscal/batch_overview.php',
+				'langs' => 'fvfiscal@fvfiscal',
+				'position' => 1000 + $r,
+				'enabled' => 'isModEnabled("fvfiscal")',
+				'perms' => $menuPermission,
+				'target' => '',
+				'user' => 2,
 		);
-		/* END MODULEBUILDER TOPMENU */
 
-		/* BEGIN MODULEBUILDER LEFTMENU MYOBJECT */
-		/*
-		$this->menu[$r++]=array(
-			'fk_menu' => 'fk_mainmenu=fvfiscal',      // '' if this is a top menu. For left menu, use 'fk_mainmenu=xxx' or 'fk_mainmenu=xxx,fk_leftmenu=yyy' where xxx is mainmenucode and yyy is a leftmenucode
-			'type' => 'left',                          // This is a Left menu entry
-			'titre' => 'MyObject',
-			'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle paddingright"'),
-			'mainmenu' => 'fvfiscal',
-			'leftmenu' => 'myobject',
-			'url' => '/fvfiscal/fvfiscalindex.php',
-			'langs' => 'fvfiscal@fvfiscal',	        // Lang file to use (without .lang) by module. File must be in langs/code_CODE/ directory.
-			'position' => 1000 + $r,
-			'enabled' => 'isModEnabled("fvfiscal")', // Define condition to show or hide menu entry. Use 'isModEnabled("fvfiscal")' if entry must be visible if module is enabled.
-			'perms' => '$user->hasRight("fvfiscal", "myobject", "read")',
-			'target' => '',
-			'user' => 2,				                // 0=Menu for internal users, 1=external users, 2=both
-			'object' => 'MyObject'
+		$this->menu[$r++] = array(
+				'fk_menu' => 'fk_mainmenu=fvfiscal',
+				'type' => 'left',
+				'titre' => 'FvFiscalBatchOverviewMenu',
+				'prefix' => img_picto('', $this->picto, 'class="pictofixedwidth valignmiddle paddingright"'),
+				'mainmenu' => 'fvfiscal',
+				'leftmenu' => 'fvfiscal_overview',
+				'url' => '/fvfiscal/batch_overview.php',
+				'langs' => 'fvfiscal@fvfiscal',
+				'position' => 1000 + $r,
+				'enabled' => 'isModEnabled("fvfiscal")',
+				'perms' => $menuPermission,
+				'target' => '',
+				'user' => 2,
 		);
-		$this->menu[$r++]=array(
-			'fk_menu' => 'fk_mainmenu=fvfiscal,fk_leftmenu=myobject',	    // '' if this is a top menu. For left menu, use 'fk_mainmenu=xxx' or 'fk_mainmenu=xxx,fk_leftmenu=yyy' where xxx is mainmenucode and yyy is a leftmenucode
-			'type' => 'left',			                // This is a Left menu entry
-			'titre' => 'New_MyObject',
-			'mainmenu' => 'fvfiscal',
-			'leftmenu' => 'fvfiscal_myobject_new',
-			'url' => '/fvfiscal/myobject_card.php?action=create',
-			'langs' => 'fvfiscal@fvfiscal',	        // Lang file to use (without .lang) by module. File must be in langs/code_CODE/ directory.
-			'position' => 1000 + $r,
-			'enabled' => 'isModEnabled("fvfiscal")', // Define condition to show or hide menu entry. Use 'isModEnabled("fvfiscal")' if entry must be visible if module is enabled. Use '$leftmenu==\'system\'' to show if leftmenu system is selected.
-			'perms' => '$user->hasRight("fvfiscal", "myobject", "write")'
-			'target' => '',
-			'user' => 2,				                // 0=Menu for internal users, 1=external users, 2=both
-			'object' => 'MyObject'
-		);
-		$this->menu[$r++]=array(
-			'fk_menu' => 'fk_mainmenu=fvfiscal,fk_leftmenu=myobject',	    // '' if this is a top menu. For left menu, use 'fk_mainmenu=xxx' or 'fk_mainmenu=xxx,fk_leftmenu=yyy' where xxx is mainmenucode and yyy is a leftmenucode
-			'type' => 'left',			                // This is a Left menu entry
-			'titre' => 'List_MyObject',
-			'mainmenu' => 'fvfiscal',
-			'leftmenu' => 'fvfiscal_myobject_list',
-			'url' => '/fvfiscal/myobject_list.php',
-			'langs' => 'fvfiscal@fvfiscal',	        // Lang file to use (without .lang) by module. File must be in langs/code_CODE/ directory.
-			'position' => 1000 + $r,
-			'enabled' => 'isModEnabled("fvfiscal")', // Define condition to show or hide menu entry. Use 'isModEnabled("fvfiscal")' if entry must be visible if module is enabled.
-			'perms' => '$user->hasRight("fvfiscal", "myobject", "read")'
-			'target' => '',
-			'user' => 2,				                // 0=Menu for internal users, 1=external users, 2=both
-			'object' => 'MyObject'
-		);
-		*/
-		/* END MODULEBUILDER LEFTMENU MYOBJECT */
-
-
 		// Exports profiles provided by this module
 		$r = 0;
 		/* BEGIN MODULEBUILDER EXPORT MYOBJECT */
