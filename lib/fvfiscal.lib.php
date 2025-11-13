@@ -28,7 +28,7 @@
  */
 function fvfiscalAdminPrepareHead()
 {
-	global $langs, $conf;
+        global $langs, $conf;
 
 	// global $db;
 	// $extrafields = new ExtraFields($db);
@@ -70,7 +70,64 @@ function fvfiscalAdminPrepareHead()
 	//); // to remove a tab
 	complete_head_from_modules($conf, $langs, null, $head, $h, 'fvfiscal@fvfiscal');
 
-	complete_head_from_modules($conf, $langs, null, $head, $h, 'fvfiscal@fvfiscal', 'remove');
+        complete_head_from_modules($conf, $langs, null, $head, $h, 'fvfiscal@fvfiscal', 'remove');
 
-	return $head;
+        return $head;
+}
+
+/**
+ * Encrypt value using Dolibarr helper when available.
+ *
+ * @param string $value
+ * @return string
+ */
+function fvfiscal_encrypt_value($value)
+{
+        $value = (string) $value;
+        if ($value === '') {
+                return '';
+        }
+
+        if (function_exists('dolEncrypt')) {
+                return dolEncrypt($value);
+        }
+        if (function_exists('dol_encrypt')) {
+                return dol_encrypt($value);
+        }
+
+        return base64_encode($value);
+}
+
+/**
+ * Decrypt value previously encoded with {@see fvfiscal_encrypt_value}.
+ *
+ * @param string $value
+ * @return string
+ */
+function fvfiscal_decrypt_value($value)
+{
+        $value = (string) $value;
+        if ($value === '') {
+                return '';
+        }
+
+        if (function_exists('dolDecrypt')) {
+                $decoded = dolDecrypt($value);
+                if ($decoded !== false) {
+                        return (string) $decoded;
+                }
+        }
+        if (function_exists('dol_decrypt')) {
+                $decoded = dol_decrypt($value);
+                if ($decoded !== false) {
+                        return (string) $decoded;
+                }
+        }
+
+        $decoded = base64_decode($value, true);
+        if ($decoded !== false) {
+                return (string) $decoded;
+        }
+
+        return $value;
 }
