@@ -9,6 +9,7 @@ require_once __DIR__ . '/../class/FvJobLine.class.php';
 require_once __DIR__ . '/../class/FvPartnerProfile.class.php';
 require_once __DIR__ . '/../class/FvNfeOut.class.php';
 require_once __DIR__ . '/../class/FvNfeEvent.class.php';
+require_once __DIR__ . '/fvfiscal.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/geturl.lib.php';
 
@@ -830,7 +831,7 @@ class FvFocusGateway
     {
         $token = '';
         if (!empty($this->conf->global->FVFISCAL_FOCUS_TOKEN)) {
-            $token = $this->conf->global->FVFISCAL_FOCUS_TOKEN;
+            $token = fvfiscal_decrypt_value($this->conf->global->FVFISCAL_FOCUS_TOKEN);
         } elseif (($env = getenv('FV_FISCAL_FOCUS_TOKEN')) !== false) {
             $token = (string) $env;
         }
@@ -848,8 +849,6 @@ class FvFocusGateway
         $endpoint = '';
         if (!empty($this->conf->global->FVFISCAL_FOCUS_ENDPOINT)) {
             $endpoint = $this->conf->global->FVFISCAL_FOCUS_ENDPOINT;
-        } elseif (!empty($this->conf->global->FVFISCAL_MYPARAM1)) {
-            $endpoint = $this->conf->global->FVFISCAL_MYPARAM1;
         }
 
         if (empty($endpoint)) {

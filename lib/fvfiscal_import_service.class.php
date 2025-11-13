@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../class/FvFocusJob.class.php';
 require_once __DIR__ . '/../class/FvNfeIn.class.php';
+require_once __DIR__ . '/../lib/fvfiscal.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/price.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/societe/class/societe.class.php';
 require_once DOL_DOCUMENT_ROOT . '/user/class/user.class.php';
@@ -740,9 +741,6 @@ class FvFiscalScienceImporter
         if (!empty($this->conf->global->FVFISCAL_FOCUS_ENDPOINT)) {
             return $this->conf->global->FVFISCAL_FOCUS_ENDPOINT;
         }
-        if (!empty($this->conf->global->FVFISCAL_MYPARAM1)) {
-            return $this->conf->global->FVFISCAL_MYPARAM1;
-        }
 
         return '';
     }
@@ -756,7 +754,7 @@ class FvFiscalScienceImporter
     {
         $token = '';
         if (!empty($this->conf->global->FVFISCAL_FOCUS_TOKEN)) {
-            $token = $this->conf->global->FVFISCAL_FOCUS_TOKEN;
+            $token = fvfiscal_decrypt_value($this->conf->global->FVFISCAL_FOCUS_TOKEN);
         } elseif (($env = getenv('FV_FISCAL_FOCUS_TOKEN')) !== false) {
             $token = (string) $env;
         }

@@ -1,7 +1,7 @@
 <?php
 /* Copyright (C) 2004-2017  Laurent Destailleur     <eldy@users.sourceforge.net>
  * Copyright (C) 2024       Frédéric France         <frederic.france@free.fr>
- * Copyright (C) 2025		SuperAdmin
+ * Copyright (C) 2025           SuperAdmin
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,602 +25,512 @@
 
 // Load Dolibarr environment
 $res = 0;
-// Try main.inc.php into web root known defined into CONTEXT_DOCUMENT_ROOT (not always defined)
-if (!$res && !empty($_SERVER["CONTEXT_DOCUMENT_ROOT"])) {
-	$res = @include $_SERVER["CONTEXT_DOCUMENT_ROOT"]."/main.inc.php";
+if (!$res && !empty($_SERVER['CONTEXT_DOCUMENT_ROOT'])) {
+    $res = @include $_SERVER['CONTEXT_DOCUMENT_ROOT'] . '/main.inc.php';
 }
-// Try main.inc.php into web root detected using web root calculated from SCRIPT_FILENAME
 $tmp = empty($_SERVER['SCRIPT_FILENAME']) ? '' : $_SERVER['SCRIPT_FILENAME'];
 $tmp2 = realpath(__FILE__);
 $i = strlen($tmp) - 1;
 $j = strlen($tmp2) - 1;
 while ($i > 0 && $j > 0 && isset($tmp[$i]) && isset($tmp2[$j]) && $tmp[$i] == $tmp2[$j]) {
-	$i--;
-	$j--;
+    $i--;
+    $j--;
 }
-if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1))."/main.inc.php")) {
-	$res = @include substr($tmp, 0, ($i + 1))."/main.inc.php";
+if (!$res && $i > 0 && file_exists(substr($tmp, 0, ($i + 1)) . '/main.inc.php')) {
+    $res = @include substr($tmp, 0, ($i + 1)) . '/main.inc.php';
 }
-if (!$res && $i > 0 && file_exists(dirname(substr($tmp, 0, ($i + 1)))."/main.inc.php")) {
-	$res = @include dirname(substr($tmp, 0, ($i + 1)))."/main.inc.php";
+if (!$res && $i > 0 && file_exists(dirname(substr($tmp, 0, ($i + 1))) . '/main.inc.php')) {
+    $res = @include dirname(substr($tmp, 0, ($i + 1))) . '/main.inc.php';
 }
-// Try main.inc.php using relative path
-if (!$res && file_exists("../../main.inc.php")) {
-	$res = @include "../../main.inc.php";
+if (!$res && file_exists('../../main.inc.php')) {
+    $res = @include '../../main.inc.php';
 }
-if (!$res && file_exists("../../../main.inc.php")) {
-	$res = @include "../../../main.inc.php";
+if (!$res && file_exists('../../../main.inc.php')) {
+    $res = @include '../../../main.inc.php';
 }
 if (!$res) {
-	die("Include of main fails");
+    die('Include of main fails');
 }
 
-// Libraries
-require_once DOL_DOCUMENT_ROOT."/core/lib/admin.lib.php";
+require_once DOL_DOCUMENT_ROOT . '/core/lib/admin.lib.php';
+require_once DOL_DOCUMENT_ROOT . '/core/class/html.form.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once '../lib/fvfiscal.lib.php';
-//require_once "../class/myclass.class.php";
+require_once '../class/FvSefazProfile.class.php';
 
 /**
- * @var Conf $conf
  * @var DoliDB $db
- * @var HookManager $hookmanager
  * @var Translate $langs
+ * @var Conf $conf
  * @var User $user
  */
 
 // Translations
-$langs->loadLangs(array("admin", "fvfiscal@fvfiscal"));
+$langs->loadLangs(array('admin', 'fvfiscal@fvfiscal'));
 
-// Initialize a technical object to manage hooks of page. Note that conf->hooks_modules contains an array of hook context
-/** @var HookManager $hookmanager */
-$hookmanager->initHooks(array('fvfiscalsetup', 'globalsetup'));
+// Access control
+if (!$user->admin) {
+    accessforbidden();
+}
 
-// Parameters
 $action = GETPOST('action', 'aZ09');
-$backtopage = GETPOST('backtopage', 'alpha');
-$modulepart = GETPOST('modulepart', 'aZ09');	// Used by actions_setmoduleoptions.inc.php
-
-$value = GETPOST('value', 'alpha');
-$label = GETPOST('label', 'alpha');
-$scandir = GETPOST('scan_dir', 'alpha');
-$type = 'myobject';
-
-$error = 0;
-$setupnotempty = 0;
-
-// Access control
-if (!$user->admin) {
-	accessforbidden();
-}
-
-
-// Set this to 1 to use the factory to manage constants. Warning, the generated module will be compatible with version v15+ only
-$useFormSetup = 1;
-
-if (!class_exists('FormSetup')) {
-	require_once DOL_DOCUMENT_ROOT.'/core/class/html.formsetup.class.php';
-}
-$formSetup = new FormSetup($db);
-
-// Access control
-if (!$user->admin) {
-	accessforbidden();
-}
-
-
-// Enter here all parameters in your setup page
-
-// Setup conf for selection of an URL
-$item = $formSetup->newItem('FVFISCAL_MYPARAM1');
-$item->fieldAttr['placeholder'] = (empty($_SERVER['HTTPS']) ? 'http://' : 'https://') . $_SERVER['HTTP_HOST'];
-$item->cssClass = 'minwidth500';
-
-// Setup conf for selection of a simple string input
-$item = $formSetup->newItem('FVFISCAL_MYPARAM2');
-$item->defaultFieldValue = 'default value';
-$item->fieldAttr['placeholder'] = 'A placeholder here';
-
-// Setup conf for selection of a simple textarea input but we replace the text of field title
-$item = $formSetup->newItem('FVFISCAL_MYPARAM3');
-$item->nameText = $item->getNameText().' more html text ';
-
-// Setup conf for a selection of a Thirdparty
-$item = $formSetup->newItem('FVFISCAL_MYPARAM4');
-$item->setAsThirdpartyType();
-
-// Setup conf for a selection of a boolean
-$formSetup->newItem('FVFISCAL_MYPARAM5')->setAsYesNo();
-
-// Setup conf for a selection of an Email template of type thirdparty
-$formSetup->newItem('FVFISCAL_MYPARAM6')->setAsEmailTemplate('thirdparty');
-
-// Setup conf for a selection of a secured key
-//$formSetup->newItem('FVFISCAL_MYPARAM7')->setAsSecureKey();
-
-// Setup conf for a selection of a Product
-$formSetup->newItem('FVFISCAL_MYPARAM8')->setAsProduct();
-
-// Add a title for a new section
-$formSetup->newItem('NewSection')->setAsTitle();
-
-$TField = array(
-	'test01' => $langs->trans('test01'),
-	'test02' => $langs->trans('test02'),
-	'test03' => $langs->trans('test03'),
-	'test04' => $langs->trans('test04'),
-	'test05' => $langs->trans('test05'),
-	'test06' => $langs->trans('test06'),
-);
-
-// Setup conf for a simple combo list
-$formSetup->newItem('FVFISCAL_MYPARAM9')->setAsSelect($TField);
-
-// Setup conf for a multiselect combo list
-$item = $formSetup->newItem('FVFISCAL_MYPARAM10');
-$item->setAsMultiSelect($TField);
-$item->helpText = $langs->transnoentities('FVFISCAL_MYPARAM10');
-
-// Setup conf for a category selection
-$formSetup->newItem('FVFISCAL_CATEGORY_ID_XXX')->setAsCategory('product');
-
-// Setup conf FVFISCAL_MYPARAM10
-$item = $formSetup->newItem('FVFISCAL_MYPARAM10');
-$item->setAsColor();
-$item->defaultFieldValue = '#FF0000';
-//$item->fieldValue = '';
-//$item->fieldAttr = array() ; // fields attribute only for compatible fields like input text
-//$item->fieldOverride = false; // set this var to override field output will override $fieldInputOverride and $fieldOutputOverride too
-//$item->fieldInputOverride = false; // set this var to override field input
-//$item->fieldOutputOverride = false; // set this var to override field output
-
-$item = $formSetup->newItem('FVFISCAL_MYPARAM11')->setAsHtml();
-$item->nameText = $item->getNameText().' more html text ';
-$item->fieldInputOverride = '';
-$item->helpText = $langs->transnoentities('HelpMessage');
-$item->cssClass = 'minwidth500';
-
-$item = $formSetup->newItem('FVFISCAL_MYPARAM12');
-$item->fieldOverride = "Value forced, can't be modified";
-$item->cssClass = 'minwidth500';
-
-//$item = $formSetup->newItem('FVFISCAL_MYPARAM13')->setAsDate();	// Not yet implemented
-
-// End of definition of parameters
-
-
-$setupnotempty += count($formSetup->items);
-
-
-$dirmodels = array_merge(array('/'), (array) $conf->modules_parts['models']);
-
-$moduledir = 'fvfiscal';
-$myTmpObjects = array();
-// TODO Scan list of objects to fill this array
-$myTmpObjects['myobject'] = array('label' => 'MyObject', 'includerefgeneration' => 0, 'includedocgeneration' => 0, 'class' => 'MyObject');
-
-$tmpobjectkey = GETPOST('object', 'aZ09');
-if ($tmpobjectkey && !array_key_exists($tmpobjectkey, $myTmpObjects)) {
-	accessforbidden('Bad value for object. Hack attempt ?');
-}
-
-
-/*
- * Actions
- */
-
-// For retrocompatibility Dolibarr < 15.0
-if (versioncompare(explode('.', DOL_VERSION), array(15)) < 0 && $action == 'update' && !empty($user->admin)) {
-	$formSetup->saveConfFromPost();
-}
-
-include DOL_DOCUMENT_ROOT.'/core/actions_setmoduleoptions.inc.php';
-
-if ($action == 'updateMask') {
-	$maskconst = GETPOST('maskconst', 'aZ09');
-	$maskvalue = GETPOST('maskvalue', 'alpha');
-
-	if ($maskconst && preg_match('/_MASK$/', $maskconst)) {
-		$res = dolibarr_set_const($db, $maskconst, $maskvalue, 'chaine', 0, '', $conf->entity);
-		if (!($res > 0)) {
-			$error++;
-		}
-	}
-
-	if (!$error) {
-		setEventMessages($langs->trans("SetupSaved"), null, 'mesgs');
-	} else {
-		setEventMessages($langs->trans("Error"), null, 'errors');
-	}
-} elseif ($action == 'specimen' && $tmpobjectkey) {
-	$modele = GETPOST('module', 'alpha');
-
-	$className = $myTmpObjects[$tmpobjectkey]['class'];
-	$tmpobject = new $className($db);
-	'@phan-var-force MyObject $tmpobject';
-	$tmpobject->initAsSpecimen();
-
-	// Search template files
-	$file = '';
-	$className = '';
-	$dirmodels = array_merge(array('/'), (array) $conf->modules_parts['models']);
-	foreach ($dirmodels as $reldir) {
-		$file = dol_buildpath($reldir."core/modules/fvfiscal/doc/pdf_".$modele."_".strtolower($tmpobjectkey).".modules.php", 0);
-		if (file_exists($file)) {
-			$className = "pdf_".$modele."_".strtolower($tmpobjectkey);
-			break;
-		}
-	}
-
-	if ($className !== '') {
-		require_once $file;
-
-		$module = new $className($db);
-		'@phan-var-force ModelePDFMyObject $module';
-
-		'@phan-var-force ModelePDFMyObject $module';
-
-		if ($module->write_file($tmpobject, $langs) > 0) {
-			header("Location: ".DOL_URL_ROOT."/document.php?modulepart=fvfiscal-".strtolower($tmpobjectkey)."&file=SPECIMEN.pdf");
-			return;
-		} else {
-			setEventMessages($module->error, null, 'errors');
-			dol_syslog($module->error, LOG_ERR);
-		}
-	} else {
-		setEventMessages($langs->trans("ErrorModuleNotFound"), null, 'errors');
-		dol_syslog($langs->trans("ErrorModuleNotFound"), LOG_ERR);
-	}
-} elseif ($action == 'setmod') {
-	// TODO Check if numbering module chosen can be activated by calling method canBeActivated
-	if (!empty($tmpobjectkey)) {
-		$constforval = 'FVFISCAL_'.strtoupper($tmpobjectkey)."_ADDON";
-		dolibarr_set_const($db, $constforval, $value, 'chaine', 0, '', $conf->entity);
-	}
-} elseif ($action == 'set') {
-	// Activate a model
-	$ret = addDocumentModel($value, $type, $label, $scandir);
-} elseif ($action == 'del') {
-	$ret = delDocumentModel($value, $type);
-	if ($ret > 0) {
-		if (!empty($tmpobjectkey)) {
-			$constforval = 'FVFISCAL_'.strtoupper($tmpobjectkey).'_ADDON_PDF';
-			if (getDolGlobalString($constforval) == "$value") {
-				dolibarr_del_const($db, $constforval, $conf->entity);
-			}
-		}
-	}
-} elseif ($action == 'setdoc') {
-	// Set or unset default model
-	if (!empty($tmpobjectkey)) {
-		$constforval = 'FVFISCAL_'.strtoupper($tmpobjectkey).'_ADDON_PDF';
-		if (dolibarr_set_const($db, $constforval, $value, 'chaine', 0, '', $conf->entity)) {
-			// The constant that was read before the new set
-			// We therefore requires a variable to have a coherent view
-			$conf->global->{$constforval} = $value;
-		}
-
-		// We disable/enable the document template (into llx_document_model table)
-		$ret = delDocumentModel($value, $type);
-		if ($ret > 0) {
-			$ret = addDocumentModel($value, $type, $label, $scandir);
-		}
-	}
-} elseif ($action == 'unsetdoc') {
-	if (!empty($tmpobjectkey)) {
-		$constforval = 'FVFISCAL_'.strtoupper($tmpobjectkey).'_ADDON_PDF';
-		dolibarr_del_const($db, $constforval, $conf->entity);
-	}
-}
-
-$action = 'edit';
-
-
-/*
- * View
- */
-
 $form = new Form($db);
 
-$help_url = '';
-$title = "FvFiscalSetup";
+$profile = fvfiscal_fetch_active_sefaz_profile($db);
+$currentCertPassword = '';
+if (!empty($profile->certificate_password)) {
+    $currentCertPassword = fvfiscal_decrypt_value($profile->certificate_password);
+}
 
-llxHeader('', $langs->trans($title), $help_url, '', 0, 0, '', '', '', 'mod-fvfiscal page-admin');
+$currentFocusToken = '';
+if (!empty($conf->global->FVFISCAL_FOCUS_TOKEN)) {
+    $currentFocusToken = fvfiscal_decrypt_value($conf->global->FVFISCAL_FOCUS_TOKEN);
+}
 
-// Subheader
-$linkback = '<a href="'.($backtopage ? $backtopage : DOL_URL_ROOT.'/admin/modules.php?restore_lastsearch_values=1').'">'.$langs->trans("BackToModuleList").'</a>';
+$currentFocusEndpoint = !empty($conf->global->FVFISCAL_FOCUS_ENDPOINT) ? $conf->global->FVFISCAL_FOCUS_ENDPOINT : '';
+$scienceAuto = !empty($conf->global->FVFISCAL_IMPORT_SCIENCE_AUTO);
+$scienceInterval = !empty($conf->global->FVFISCAL_IMPORT_CRON_MIN) ? (int) $conf->global->FVFISCAL_IMPORT_CRON_MIN : 15;
 
-print load_fiche_titre($langs->trans($title), $linkback, 'title_setup');
+$errors = array();
+$messages = array();
 
-// Configuration header
+if ($action === 'save') {
+    if (!dol_validateToken(GETPOST('token'))) {
+        accessforbidden($langs->trans('FvFiscalInvalidToken'));
+    }
+
+    $focusEndpoint = trim((string) GETPOST('focus_endpoint', 'restricthtml'));
+    $focusTokenInput = trim((string) GETPOST('focus_token', 'restricthtml'));
+    $focusTokenClear = GETPOST('focus_token_clear', 'int');
+    $sefazEnvironment = trim((string) GETPOST('sefaz_environment', 'alpha'));
+    $taxRegime = trim((string) GETPOST('tax_regime', 'alpha'));
+    $taxRegimeDetail = trim((string) GETPOST('tax_regime_detail', 'alpha'));
+    $certificatePasswordInput = GETPOST('certificate_password', 'restricthtml');
+    $scienceAutoInput = GETPOST('science_auto', 'int');
+    $scienceIntervalInput = (int) GETPOST('science_interval', 'int');
+
+    if ($focusEndpoint === '' || !filter_var($focusEndpoint, FILTER_VALIDATE_URL)) {
+        $errors[] = $langs->trans('FvFiscalErrorFocusEndpoint');
+    }
+
+    $focusTokenToStore = $currentFocusToken;
+    if (!empty($focusTokenInput)) {
+        $focusTokenToStore = $focusTokenInput;
+    } elseif (!empty($focusTokenClear)) {
+        $focusTokenToStore = '';
+    }
+
+    $certificatePasswordToUse = $currentCertPassword;
+    if ($certificatePasswordInput !== '') {
+        $certificatePasswordToUse = $certificatePasswordInput;
+    }
+
+    $certificateFile = $_FILES['certificate_file'] ?? null;
+    $hasUploadedCertificate = $certificateFile && !empty($certificateFile['tmp_name']);
+    $certificatePath = $profile->certificate_path;
+    $certificateExpiration = (int) $profile->certificate_expire_at;
+
+    if ($hasUploadedCertificate && $certificatePasswordToUse === '') {
+        $errors[] = $langs->trans('FvFiscalErrorCertificatePasswordRequired');
+    }
+
+    if (!empty($sefazEnvironment) && !in_array($sefazEnvironment, array('production', 'homologation'), true)) {
+        $errors[] = $langs->trans('FvFiscalErrorInvalidEnvironment');
+    }
+
+    if ($scienceIntervalInput <= 0) {
+        $scienceIntervalInput = 15;
+    }
+
+    $certificateSourcePath = '';
+    if ($hasUploadedCertificate) {
+        $certificateSourcePath = $certificateFile['tmp_name'];
+    } elseif (!empty($certificatePath)) {
+        $certificateSourcePath = rtrim(DOL_DATA_ROOT, '/') . '/' . ltrim($certificatePath, '/');
+    }
+
+    if (!$hasUploadedCertificate && empty($certificatePath)) {
+        $errors[] = $langs->trans('FvFiscalErrorCertificateRequired');
+    }
+
+    if ($certificateSourcePath !== '' && $certificatePasswordToUse !== '') {
+        $certificateInfo = fvfiscal_parse_certificate($certificateSourcePath, $certificatePasswordToUse);
+        if ($certificateInfo === null) {
+            $errors[] = $langs->trans('FvFiscalErrorCertificateInvalid');
+        } else {
+            $certificateExpiration = $certificateInfo['valid_to'];
+            $messages[] = $langs->trans('FvFiscalCertificateValidated', dol_print_date($certificateExpiration, 'dayhour', 'tzuser'));
+        }
+    } elseif ($certificateSourcePath === '' && $certificatePasswordToUse !== '') {
+        $errors[] = $langs->trans('FvFiscalErrorCertificateMissing');
+    }
+
+    $focusStatusOk = false;
+    if (empty($errors)) {
+        $focusStatus = fvfiscal_ping_focus_status($focusEndpoint, $focusTokenToStore, $langs);
+        if (!$focusStatus['success']) {
+            $errors[] = $focusStatus['message'];
+        } else {
+            $focusStatusOk = true;
+        }
+    }
+
+    if (empty($errors)) {
+        $db->begin();
+
+        $encryptedPassword = $certificatePasswordToUse !== '' ? fvfiscal_encrypt_value($certificatePasswordToUse) : '';
+        $profile->entity = $conf->entity;
+        $profile->status = 1;
+        if (empty($profile->ref)) {
+            $profile->ref = 'DEFAULT';
+        }
+        if (empty($profile->name)) {
+            $profile->name = $langs->transnoentities('FvFiscalDefaultProfileName');
+        }
+        $profile->environment = $sefazEnvironment ?: 'production';
+        $profile->tax_regime = $taxRegime;
+        $profile->tax_regime_detail = $taxRegimeDetail;
+        if ($encryptedPassword !== '') {
+            $profile->certificate_password = $encryptedPassword;
+        }
+        if (!empty($certificateExpiration)) {
+            $profile->certificate_expire_at = $certificateExpiration;
+        }
+
+        if ($hasUploadedCertificate) {
+            $targetRelativeDir = 'fiscal/certificates';
+            $targetDir = rtrim(DOL_DATA_ROOT, '/') . '/' . $targetRelativeDir;
+            dol_mkdir($targetDir);
+            $sanitizedName = dol_sanitizeFileName($certificateFile['name']);
+            if ($sanitizedName === '') {
+                $sanitizedName = 'sefaz-cert.pfx';
+            }
+            $extension = '.pfx';
+            if (preg_match('/\.(p12|pfx)$/i', $sanitizedName, $matches)) {
+                $extension = '.' . strtolower($matches[1]);
+            }
+            $baseName = preg_replace('/\.(p12|pfx)$/i', '', $sanitizedName);
+            if ($baseName === '') {
+                $baseName = 'sefaz-cert';
+            }
+            $timestampSuffix = dol_print_date(dol_now(), 'dayhourlog');
+            $targetFile = $baseName . '-' . $timestampSuffix . $extension;
+            $targetPath = $targetDir . '/' . $targetFile;
+            $uploadOk = false;
+            if (function_exists('dol_move_uploaded_file')) {
+                $uploadOk = (bool) dol_move_uploaded_file($certificateFile['tmp_name'], $targetDir . '/', $targetFile, 1);
+            }
+            if (!$uploadOk) {
+                $uploadOk = move_uploaded_file($certificateFile['tmp_name'], $targetPath);
+            }
+            if (!$uploadOk) {
+                $db->rollback();
+                $errors[] = $langs->trans('FvFiscalErrorCertificateMoveFailed');
+            } else {
+                $profile->certificate_path = $targetRelativeDir . '/' . $targetFile;
+                $messages[] = $langs->trans('FvFiscalCertificateStored', $profile->certificate_path);
+            }
+        }
+
+        if (empty($errors)) {
+            if ($profile->id > 0) {
+                $result = $profile->update($user);
+            } else {
+                $result = $profile->create($user);
+            }
+
+            if ($result <= 0) {
+                $db->rollback();
+                $errors[] = $profile->error ?: $langs->trans('Error');
+            } else {
+                $focusTokenEncrypted = $focusTokenToStore !== '' ? fvfiscal_encrypt_value($focusTokenToStore) : '';
+                if ($focusTokenEncrypted === '') {
+                    dolibarr_del_const($db, 'FVFISCAL_FOCUS_TOKEN', $conf->entity);
+                    unset($conf->global->FVFISCAL_FOCUS_TOKEN);
+                } else {
+                    dolibarr_set_const($db, 'FVFISCAL_FOCUS_TOKEN', $focusTokenEncrypted, 'chaine', 0, '', $conf->entity);
+                    $conf->global->FVFISCAL_FOCUS_TOKEN = $focusTokenEncrypted;
+                }
+
+                dolibarr_set_const($db, 'FVFISCAL_FOCUS_ENDPOINT', $focusEndpoint, 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_FOCUS_ENDPOINT = $focusEndpoint;
+
+                dolibarr_set_const($db, 'FVFISCAL_IMPORT_SCIENCE_AUTO', $scienceAutoInput ? '1' : '0', 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_IMPORT_SCIENCE_AUTO = $scienceAutoInput ? '1' : '';
+
+                dolibarr_set_const($db, 'FVFISCAL_IMPORT_CRON_MIN', $scienceIntervalInput, 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_IMPORT_CRON_MIN = $scienceIntervalInput;
+
+                $db->commit();
+
+                $messages[] = $langs->trans('FvFiscalSetupSaved');
+                if ($focusStatusOk) {
+                    $messages[] = $langs->trans('FvFiscalFocusStatusOk');
+                }
+
+                $profile = fvfiscal_fetch_active_sefaz_profile($db);
+                $currentCertPassword = $certificatePasswordToUse;
+                $currentFocusToken = $focusTokenToStore;
+                $currentFocusEndpoint = $focusEndpoint;
+                $scienceAuto = (bool) $scienceAutoInput;
+                $scienceInterval = $scienceIntervalInput;
+            }
+        }
+    }
+
+    if (!empty($errors)) {
+        setEventMessages('', $errors, 'errors');
+    }
+    if (!empty($messages)) {
+        setEventMessages('', $messages);
+    }
+}
+
+llxHeader('', $langs->trans('FvFiscalSetup'));
+
 $head = fvfiscalAdminPrepareHead();
-print dol_get_fiche_head($head, 'settings', $langs->trans($title), -1, "fvfiscal@fvfiscal");
+print dol_get_fiche_head($head, 'settings', $langs->trans('FvFiscalSetup'));
 
-// Setup page goes here
-echo '<span class="opacitymedium">'.$langs->trans("FvFiscalSetupPage").'</span><br><br>';
+print load_fiche_titre($langs->trans('FvFiscalSetupPage'), '', 'title_setup');
 
+print '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '" enctype="multipart/form-data">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
+print '<input type="hidden" name="action" value="save">';
 
-/*if ($action == 'edit') {
- print $formSetup->generateOutput(true);
- print '<br>';
- } elseif (!empty($formSetup->items)) {
- print $formSetup->generateOutput();
- print '<div class="tabsAction">';
- print '<a class="butAction" href="'.$_SERVER["PHP_SELF"].'?action=edit&token='.newToken().'">'.$langs->trans("Modify").'</a>';
- print '</div>';
- }
- */
-if (!empty($formSetup->items)) {
-	print $formSetup->generateOutput(true);
-	print '<br>';
+print '<div class="fichecenter">';
+print '<div class="underbanner clearboth"></div>';
+print '<table class="noborder centpercent">';
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalCertificateSection') . '</th></tr>';
+
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalCertificateUpload') . '</td>';
+print '<td><input type="file" name="certificate_file" accept=".pfx,.p12">';
+if (!empty($profile->certificate_path)) {
+    print '<br><span class="opacitymedium">' . dol_escape_htmltag($profile->certificate_path) . '</span>';
 }
+print '<div class="small opacitymedium">' . $langs->trans('FvFiscalCertificateSecurityNotice', 'documents/fiscal/') . '</div>';
+print '</td>';
+print '</tr>';
 
-
-foreach ($myTmpObjects as $myTmpObjectKey => $myTmpObjectArray) {
-	if (!empty($myTmpObjectArray['includerefgeneration'])) {
-		/*
-		 * Orders Numbering model
-		 */
-		$setupnotempty++;
-
-		print load_fiche_titre($langs->trans("NumberingModules", $myTmpObjectArray['label']), '', '');
-
-		print '<table class="noborder centpercent">';
-		print '<tr class="liste_titre">';
-		print '<td>'.$langs->trans("Name").'</td>';
-		print '<td>'.$langs->trans("Description").'</td>';
-		print '<td class="nowrap">'.$langs->trans("Example").'</td>';
-		print '<td class="center" width="60">'.$langs->trans("Status").'</td>';
-		print '<td class="center" width="16">'.$langs->trans("ShortInfo").'</td>';
-		print '</tr>'."\n";
-
-		clearstatcache();
-
-		foreach ($dirmodels as $reldir) {
-			$dir = dol_buildpath($reldir."core/modules/".$moduledir);
-
-			if (is_dir($dir)) {
-				$handle = opendir($dir);
-				if (is_resource($handle)) {
-					while (($file = readdir($handle)) !== false) {
-						if (strpos($file, 'mod_'.strtolower($myTmpObjectKey).'_') === 0 && substr($file, dol_strlen($file) - 3, 3) == 'php') {
-							$file = substr($file, 0, dol_strlen($file) - 4);
-
-							require_once $dir.'/'.$file.'.php';
-
-							$module = new $file($db);
-							'@phan-var-force ModeleNumRefMyObject $module';
-
-							// Show modules according to features level
-							if ($module->version == 'development' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 2) {
-								continue;
-							}
-							if ($module->version == 'experimental' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 1) {
-								continue;
-							}
-
-							if ($module->isEnabled()) {
-								dol_include_once('/'.$moduledir.'/class/'.strtolower($myTmpObjectKey).'.class.php');
-
-								print '<tr class="oddeven"><td>'.$module->getName($langs)."</td><td>\n";
-								print $module->info($langs);
-								print '</td>';
-
-								// Show example of numbering model
-								print '<td class="nowrap">';
-								$tmp = $module->getExample();
-								if (preg_match('/^Error/', $tmp)) {
-									$langs->load("errors");
-									print '<div class="error">'.$langs->trans($tmp).'</div>';
-								} elseif ($tmp == 'NotConfigured') {
-									print $langs->trans($tmp);
-								} else {
-									print $tmp;
-								}
-								print '</td>'."\n";
-
-								print '<td class="center">';
-								$constforvar = 'FVFISCAL_'.strtoupper($myTmpObjectKey).'_ADDON';
-								if (getDolGlobalString($constforvar) == $file) {
-									print img_picto($langs->trans("Activated"), 'switch_on');
-								} else {
-									print '<a href="'.$_SERVER["PHP_SELF"].'?action=setmod&token='.newToken().'&object='.strtolower($myTmpObjectKey).'&value='.urlencode($file).'">';
-									print img_picto($langs->trans("Disabled"), 'switch_off');
-									print '</a>';
-								}
-								print '</td>';
-
-								$className = $myTmpObjectArray['class'];
-								$mytmpinstance = new $className($db);
-								'@phan-var-force MyObject $mytmpinstance';
-								$mytmpinstance->initAsSpecimen();
-
-								// Info
-								$htmltooltip = '';
-								$htmltooltip .= ''.$langs->trans("Version").': <b>'.$module->getVersion().'</b><br>';
-
-								$nextval = $module->getNextValue($mytmpinstance);
-								if ("$nextval" != $langs->trans("NotAvailable")) {  // Keep " on nextval
-									$htmltooltip .= ''.$langs->trans("NextValue").': ';
-									if ($nextval) {
-										if (preg_match('/^Error/', $nextval) || $nextval == 'NotConfigured') {
-											$nextval = $langs->trans($nextval);
-										}
-										$htmltooltip .= $nextval.'<br>';
-									} else {
-										$htmltooltip .= $langs->trans($module->error).'<br>';
-									}
-								}
-
-								print '<td class="center">';
-								print $form->textwithpicto('', $htmltooltip, 1, 0);
-								print '</td>';
-
-								print "</tr>\n";
-							}
-						}
-					}
-					closedir($handle);
-				}
-			}
-		}
-		print "</table><br>\n";
-	}
-
-	if (!empty($myTmpObjectArray['includedocgeneration'])) {
-		/*
-		 * Document templates generators
-		 */
-		$setupnotempty++;
-		$type = strtolower($myTmpObjectKey);
-
-		print load_fiche_titre($langs->trans("DocumentModules", $myTmpObjectKey), '', '');
-
-		// Load array def with activated templates
-		$def = array();
-		$sql = "SELECT nom";
-		$sql .= " FROM ".MAIN_DB_PREFIX."document_model";
-		$sql .= " WHERE type = '".$db->escape($type)."'";
-		$sql .= " AND entity = ".$conf->entity;
-		$resql = $db->query($sql);
-		if ($resql) {
-			$i = 0;
-			$num_rows = $db->num_rows($resql);
-			while ($i < $num_rows) {
-				$array = $db->fetch_array($resql);
-				array_push($def, $array[0]);
-				$i++;
-			}
-		} else {
-			dol_print_error($db);
-		}
-
-		print '<table class="noborder centpercent">'."\n";
-		print '<tr class="liste_titre">'."\n";
-		print '<td>'.$langs->trans("Name").'</td>';
-		print '<td>'.$langs->trans("Description").'</td>';
-		print '<td class="center" width="60">'.$langs->trans("Status")."</td>\n";
-		print '<td class="center" width="60">'.$langs->trans("Default")."</td>\n";
-		print '<td class="center" width="38">'.$langs->trans("ShortInfo").'</td>';
-		print '<td class="center" width="38">'.$langs->trans("Preview").'</td>';
-		print "</tr>\n";
-
-		clearstatcache();
-
-		foreach ($dirmodels as $reldir) {
-			foreach (array('', '/doc') as $valdir) {
-				$realpath = $reldir."core/modules/".$moduledir.$valdir;
-				$dir = dol_buildpath($realpath);
-
-				if (is_dir($dir)) {
-					$handle = opendir($dir);
-					if (is_resource($handle)) {
-						$filelist = array();
-						while (($file = readdir($handle)) !== false) {
-							$filelist[] = $file;
-						}
-						closedir($handle);
-						arsort($filelist);
-
-						foreach ($filelist as $file) {
-							if (preg_match('/\.modules\.php$/i', $file) && preg_match('/^(pdf_|doc_)/', $file)) {
-								if (file_exists($dir.'/'.$file)) {
-									$name = substr($file, 4, dol_strlen($file) - 16);
-									$className = substr($file, 0, dol_strlen($file) - 12);
-
-									require_once $dir.'/'.$file;
-									$module = new $className($db);
-									'@phan-var-force ModelePDFMyObject $module';
-
-									$modulequalified = 1;
-									if ($module->version == 'development' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 2) {
-										$modulequalified = 0;
-									}
-									if ($module->version == 'experimental' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 1) {
-										$modulequalified = 0;
-									}
-
-									if ($modulequalified) {
-										print '<tr class="oddeven"><td width="100">';
-										print(empty($module->name) ? $name : $module->name);
-										print "</td><td>\n";
-										if (method_exists($module, 'info')) {
-											print $module->info($langs);  // @phan-suppress-current-line PhanUndeclaredMethod
-										} else {
-											print $module->description;
-										}
-										print '</td>';
-
-										// Active
-										if (in_array($name, $def)) {
-											print '<td class="center">'."\n";
-											print '<a href="'.$_SERVER["PHP_SELF"].'?action=del&token='.newToken().'&value='.urlencode($name).'">';
-											print img_picto($langs->trans("Enabled"), 'switch_on');
-											print '</a>';
-											print '</td>';
-										} else {
-											print '<td class="center">'."\n";
-											print '<a href="'.$_SERVER["PHP_SELF"].'?action=set&token='.newToken().'&value='.urlencode($name).'&scan_dir='.urlencode($module->scandir).'&label='.urlencode($module->name).'">'.img_picto($langs->trans("Disabled"), 'switch_off').'</a>';
-											print "</td>";
-										}
-
-										// Default
-										print '<td class="center">';
-										$constforvar = 'FVFISCAL_'.strtoupper($myTmpObjectKey).'_ADDON_PDF';
-										if (getDolGlobalString($constforvar) == $name) {
-											//print img_picto($langs->trans("Default"), 'on');
-											// Even if choice is the default value, we allow to disable it. Replace this with previous line if you need to disable unset
-											print '<a href="'.$_SERVER["PHP_SELF"].'?action=unsetdoc&token='.newToken().'&object='.urlencode(strtolower($myTmpObjectKey)).'&value='.urlencode($name).'&scan_dir='.urlencode($module->scandir).'&label='.urlencode($module->name).'&amp;type='.urlencode($type).'" alt="'.$langs->trans("Disable").'">'.img_picto($langs->trans("Enabled"), 'on').'</a>';
-										} else {
-											print '<a href="'.$_SERVER["PHP_SELF"].'?action=setdoc&token='.newToken().'&object='.urlencode(strtolower($myTmpObjectKey)).'&value='.urlencode($name).'&scan_dir='.urlencode($module->scandir).'&label='.urlencode($module->name).'" alt="'.$langs->trans("Default").'">'.img_picto($langs->trans("Disabled"), 'off').'</a>';
-										}
-										print '</td>';
-
-										// Info
-										$htmltooltip = ''.$langs->trans("Name").': '.$module->name;
-										$htmltooltip .= '<br>'.$langs->trans("Type").': '.($module->type ? $module->type : $langs->trans("Unknown"));
-										if ($module->type == 'pdf') {
-											$htmltooltip .= '<br>'.$langs->trans("Width").'/'.$langs->trans("Height").': '.$module->page_largeur.'/'.$module->page_hauteur;
-										}
-										$htmltooltip .= '<br>'.$langs->trans("Path").': '.preg_replace('/^\//', '', $realpath).'/'.$file;
-
-										$htmltooltip .= '<br><br><u>'.$langs->trans("FeaturesSupported").':</u>';
-										$htmltooltip .= '<br>'.$langs->trans("Logo").': '.yn($module->option_logo, 1, 1);
-										$htmltooltip .= '<br>'.$langs->trans("MultiLanguage").': '.yn($module->option_multilang, 1, 1);
-
-										print '<td class="center">';
-										print $form->textwithpicto('', $htmltooltip, 1, 0);
-										print '</td>';
-
-										// Preview
-										print '<td class="center">';
-										if ($module->type == 'pdf') {
-											$newname = preg_replace('/_'.preg_quote(strtolower($myTmpObjectKey), '/').'/', '', $name);
-											print '<a href="'.$_SERVER["PHP_SELF"].'?action=specimen&module='.urlencode($newname).'&object='.urlencode($myTmpObjectKey).'">'.img_object($langs->trans("Preview"), 'pdf').'</a>';
-										} else {
-											print img_object($langs->transnoentitiesnoconv("PreviewNotAvailable"), 'generic');
-										}
-										print '</td>';
-
-										print "</tr>\n";
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		print '</table>';
-	}
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalCertificatePassword') . '</td>';
+print '<td>';
+print '<input type="password" name="certificate_password" autocomplete="new-password" value="">';
+if ($currentCertPassword !== '') {
+    print '<div class="small opacitymedium">' . $langs->trans('FvFiscalCertificatePasswordHelp') . '</div>';
 }
+print '</td>';
+print '</tr>';
 
-if (empty($setupnotempty)) {
-	print '<br>'.$langs->trans("NothingToSetup");
+$expirationValue = '';
+if (!empty($profile->certificate_expire_at)) {
+    $expirationValue = dol_print_date($profile->certificate_expire_at, 'dayhour', 'tzuser');
 }
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalCertificateExpiration') . '</td>';
+print '<td>' . ($expirationValue !== '' ? dol_escape_htmltag($expirationValue) : '<span class="opacitymedium">' . $langs->trans('Unknown') . '</span>') . '</td>';
+print '</tr>';
 
-// Page end
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalSefazSection') . '</th></tr>';
+
+$environmentOptions = array(
+    'production' => $langs->trans('FvFiscalSefazEnvironmentProduction'),
+    'homologation' => $langs->trans('FvFiscalSefazEnvironmentHomologation'),
+);
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalSefazEnvironment') . '</td>';
+print '<td>' . $form->selectarray('sefaz_environment', $environmentOptions, $profile->environment ?: 'production', 0, 0, 0, '', 0, 0, 0, '', '');
+print '</td>';
+print '</tr>';
+
+$taxRegimeOptions = array(
+    '' => $langs->trans('Select'),
+    '1' => $langs->trans('FvFiscalTaxRegime1'),
+    '2' => $langs->trans('FvFiscalTaxRegime2'),
+    '3' => $langs->trans('FvFiscalTaxRegime3'),
+);
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalTaxRegime') . '</td>';
+print '<td>' . $form->selectarray('tax_regime', $taxRegimeOptions, $profile->tax_regime, 0, 0, 0, '', 0, 0, 0, '', '') . '</td>';
+print '</tr>';
+
+$taxRegimeDetailOptions = array(
+    '' => $langs->trans('Select'),
+    'mei' => $langs->trans('FvFiscalTaxRegimeDetailMei'),
+    'sn_excess' => $langs->trans('FvFiscalTaxRegimeDetailSnExcess'),
+    'lucro_presumido' => $langs->trans('FvFiscalTaxRegimeDetailPresumido'),
+    'lucro_real' => $langs->trans('FvFiscalTaxRegimeDetailReal'),
+);
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalTaxRegimeDetail') . '</td>';
+print '<td>' . $form->selectarray('tax_regime_detail', $taxRegimeDetailOptions, $profile->tax_regime_detail, 0, 0, 0, '', 0, 0, 0, '', '') . '</td>';
+print '</tr>';
+
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalFocusSection') . '</th></tr>';
+
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalFocusEndpoint') . '</td>';
+print '<td><input type="text" name="focus_endpoint" class="minwidth400" value="' . dol_escape_htmltag($currentFocusEndpoint) . '" placeholder="https://api.focusnfe.com.br"></td>';
+print '</tr>';
+
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalFocusToken') . '</td>';
+print '<td>';
+print '<input type="password" name="focus_token" class="minwidth400" autocomplete="new-password" value="">';
+if ($currentFocusToken !== '') {
+    print '<div class="small opacitymedium">' . $langs->trans('FvFiscalFocusTokenHelp') . '</div>';
+    print '<div><label class="inline-block"><input type="checkbox" name="focus_token_clear" value="1"> ' . $langs->trans('FvFiscalFocusTokenClear') . '</label></div>';
+}
+print '</td>';
+print '</tr>';
+
+print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalScienceSection') . '</th></tr>';
+
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalScienceAuto') . '</td>';
+print '<td><label><input type="checkbox" name="science_auto" value="1"' . ($scienceAuto ? ' checked' : '') . '> ' . $langs->trans('FvFiscalScienceAutoHelp') . '</label></td>';
+print '</tr>';
+
+print '<tr class="oddeven">';
+print '<td>' . $langs->trans('FvFiscalScienceInterval') . '</td>';
+print '<td><input type="number" name="science_interval" min="5" max="1440" value="' . (int) $scienceInterval . '"> ' . $langs->trans('Minutes') . '</td>';
+print '</tr>';
+
+print '</table>';
+print '</div>';
+
+print '<div class="center">';
+print '<input type="submit" class="button" value="' . $langs->trans('Save') . '">';
+print '</div>';
+print '</form>';
+
 print dol_get_fiche_end();
 
 llxFooter();
 $db->close();
+
+/**
+ * Fetch the active SEFAZ profile for the current entity.
+ *
+ * @param DoliDB $db
+ * @return FvSefazProfile
+ */
+function fvfiscal_fetch_active_sefaz_profile($db)
+{
+    $profile = new FvSefazProfile($db);
+
+    $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "fv_sefaz_profile";
+    $sql .= ' WHERE entity IN (' . getEntity('fv_sefaz_profile') . ')';
+    $sql .= ' ORDER BY status DESC, rowid ASC LIMIT 1';
+
+    $resql = $db->query($sql);
+    if ($resql) {
+        $obj = $db->fetch_object($resql);
+        $db->free($resql);
+        if ($obj) {
+            $profile->fetch((int) $obj->rowid);
+        }
+    }
+
+    return $profile;
+}
+
+/**
+ * Parse PKCS#12 certificate to validate password and expiration.
+ *
+ * @param string    $path
+ * @param string    $password
+ * @return array{valid_to:int}|null
+ */
+function fvfiscal_parse_certificate($path, $password)
+{
+    if (!function_exists('openssl_pkcs12_read')) {
+        return null;
+    }
+
+    $content = @file_get_contents($path);
+    if ($content === false) {
+        return null;
+    }
+
+    $certs = array();
+    if (!@openssl_pkcs12_read($content, $certs, $password)) {
+        return null;
+    }
+
+    if (empty($certs['cert'])) {
+        return null;
+    }
+
+    $info = openssl_x509_parse($certs['cert']);
+    if ($info === false || empty($info['validTo_time_t'])) {
+        return null;
+    }
+
+    return array('valid_to' => (int) $info['validTo_time_t']);
+}
+
+/**
+ * Ping Focus API status endpoint.
+ *
+ * @param string    $endpoint
+ * @param string    $token
+ * @param Translate $langs
+ * @return array{success:bool,message:string}
+ */
+function fvfiscal_ping_focus_status($endpoint, $token, $langs)
+{
+    if (!function_exists('curl_init')) {
+        return array('success' => false, 'message' => $langs->trans('FvFiscalErrorCurlMissing'));
+    }
+
+    $url = rtrim($endpoint, '/') . '/v2/status';
+    $headers = array('Accept: application/json');
+    $token = trim((string) $token);
+    if ($token !== '') {
+        if (stripos($token, 'bearer ') === 0 || stripos($token, 'basic ') === 0) {
+            $headers[] = 'Authorization: ' . $token;
+        } else {
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+    }
+
+    $curl = curl_init();
+    curl_setopt_array($curl, array(
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_HTTPHEADER => $headers,
+    ));
+
+    $content = curl_exec($curl);
+    if ($content === false) {
+        $message = curl_error($curl);
+        $code = curl_errno($curl);
+        curl_close($curl);
+
+        return array('success' => false, 'message' => $langs->trans('FvFiscalErrorFocusStatusCurl', $code, $message));
+    }
+
+    $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+
+    if ($httpCode >= 400) {
+        return array('success' => false, 'message' => $langs->trans('FvFiscalErrorFocusStatusHttp', $httpCode));
+    }
+
+    if ($content === '' || $content === null) {
+        return array('success' => true, 'message' => $langs->trans('FvFiscalFocusStatusOk'));
+    }
+
+    $decoded = json_decode($content, true);
+    if (is_array($decoded)) {
+        if (!empty($decoded['status']) && strtolower((string) $decoded['status']) !== 'ok') {
+            $status = (string) $decoded['status'];
+            return array('success' => false, 'message' => $langs->trans('FvFiscalErrorFocusStatusPayload', $status));
+        }
+    }
+
+    return array('success' => true, 'message' => $langs->trans('FvFiscalFocusStatusOk'));
+}
