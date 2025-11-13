@@ -409,7 +409,7 @@ class FvFocusGateway
     /**
      * Reset error information.
      */
-    private function resetErrors()
+    protected function resetErrors()
     {
         $this->error = '';
         $this->errors = array();
@@ -548,7 +548,7 @@ class FvFocusGateway
      * @param array  $payload
      * @return array<string, mixed>|null
      */
-    private function performFocusRequest($method, $path, array $payload = array())
+    protected function performFocusRequest($method, $path, array $payload = array())
     {
         $endpoint = $this->getFocusEndpoint();
         if (empty($endpoint)) {
@@ -636,7 +636,7 @@ class FvFocusGateway
      * @param int    $httpCode
      * @return int
      */
-    private function handleFocusErrorResponse($content, $httpCode)
+    protected function handleFocusErrorResponse($content, $httpCode)
     {
         $details = array('HTTP ' . $httpCode);
         $message = 'HTTP ' . $httpCode;
@@ -675,7 +675,7 @@ class FvFocusGateway
      * @param array<int, string>       $keys
      * @return string
      */
-    private function resolveXmlContent(array $response, array $keys)
+    protected function resolveXmlContent(array $response, array $keys)
     {
         foreach ($keys as $key) {
             if (!empty($response[$key])) {
@@ -706,7 +706,7 @@ class FvFocusGateway
      * @param mixed $value
      * @return string
      */
-    private function decodeXmlValue($value)
+    protected function decodeXmlValue($value)
     {
         $value = (string) $value;
         if ($value === '') {
@@ -737,7 +737,7 @@ class FvFocusGateway
      * @param string $filename
      * @return string Relative path when stored
      */
-    private function storeDocumentContent($subdir, $id, $content, $filename)
+    protected function storeDocumentContent($subdir, $id, $content, $filename)
     {
         $content = (string) $content;
         if ($content === '') {
@@ -765,7 +765,7 @@ class FvFocusGateway
      * @param array $keys
      * @return string
      */
-    private function extractString(array $data, array $keys)
+    protected function extractString(array $data, array $keys)
     {
         foreach ($keys as $key) {
             if (isset($data[$key]) && $data[$key] !== '') {
@@ -782,7 +782,7 @@ class FvFocusGateway
      * @param array|null $data
      * @return string|null
      */
-    private function encodeJson($data)
+    protected function encodeJson($data)
     {
         if ($data === null) {
             return null;
@@ -802,7 +802,7 @@ class FvFocusGateway
      * @param mixed $value
      * @return int|null
      */
-    private function parseDatetime($value)
+    protected function parseDatetime($value)
     {
         if ($value === null || $value === '') {
             return null;
@@ -827,7 +827,7 @@ class FvFocusGateway
      *
      * @return string
      */
-    private function getFocusToken()
+    protected function getFocusToken()
     {
         $token = '';
         if (!empty($this->conf->global->FVFISCAL_FOCUS_TOKEN)) {
@@ -844,7 +844,7 @@ class FvFocusGateway
      *
      * @return string
      */
-    private function getFocusEndpoint()
+    protected function getFocusEndpoint()
     {
         $endpoint = '';
         if (!empty($this->conf->global->FVFISCAL_FOCUS_ENDPOINT)) {
@@ -867,7 +867,7 @@ class FvFocusGateway
      * @param array  $options Optional fields (fk_sefaz_profile, status, scheduled_for)
      * @return FvFocusJob|null
      */
-    private function createFocusJob($user, $type, array $payload, array $options = array())
+    protected function createFocusJob($user, $type, array $payload, array $options = array())
     {
         $focusJob = new FvFocusJob($this->db);
         $focusJob->entity = $this->conf->entity;
@@ -896,7 +896,7 @@ class FvFocusGateway
      * @param string[] $extra   Additional errors
      * @return int
      */
-    private function failWith($message, array $extra = array())
+    protected function failWith($message, array $extra = array())
     {
         $this->error = $message;
         if (!in_array($message, $this->errors, true)) {
