@@ -413,7 +413,10 @@ class FvFiscalScienceImporter
         $nfe->status = 0;
         $nfe->nfe_key = $nfeKey;
         $nfe->ref = $this->extractString($data, array('ref', 'number', 'numero', 'nfe_number', 'reference'), substr($nfeKey, -9));
-        $nfe->fk_soc = $this->resolveThirdparty($data);
+        $nfe->fk_soc = $this->resolveThirdparty($user, $data);
+        if ($nfe->fk_soc <= 0) {
+            throw new RuntimeException('Unable to resolve thirdparty for NF-e ' . $nfeKey);
+        }
         $nfe->doc_type = $this->extractString($data, array('doc_type', 'document_type'), 'nfe');
         $this->applyNfeInData($nfe, $data);
 
@@ -432,37 +435,92 @@ class FvFiscalScienceImporter
      * @param array<string, mixed> $data
      * @return int
      */
-    private function resolveThirdparty(array $data)
+    protected function resolveThirdparty(User $user, array $data)
     {
         if (!empty($data['fk_soc'])) {
             return (int) $data['fk_soc'];
         }
 
-        $document = $this->extractString($data, array('cnpj', 'cpf', 'document', 'identifier', 'issuer_document', 'emitente_documento'));
+        $document = $this->normalizeDocument($this->extractString($data, array('cnpj', 'cpf', 'document', 'identifier', 'issuer_document', 'emitente_documento')));
         if ($document === '') {
-            return 0;
+            throw new RuntimeException('DF-e issuer document not available');
         }
 
-        $document = preg_replace('/[^0-9]/', '', $document);
-        if ($document === '') {
-            return 0;
+        $existingId = $this->findThirdpartyIdByDocument($document);
+        if ($existingId > 0) {
+            return $existingId;
         }
 
-        $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "societe";
-        $sql .= ' WHERE entity IN (' . getEntity('societe') . ')';
-        $sql .= " AND (tva_intra = '" . $this->db->escape($document) . "'";
-        $sql .= " OR idprof2 = '" . $this->db->escape($document) . "')";
-        $sql .= ' ORDER BY rowid ASC LIMIT 1';
+        $societe = $this->instantiateSociete();
+        $societe->entity = $this->conf->entity;
+        $societe->status = 1;
+        $societe->client = 0;
+        $societe->fournisseur = 1;
 
-        $resql = $this->db->query($sql);
-        if (!$resql) {
-            return 0;
+        $name = $this->extractString($data, array(
+            'issuer_name',
+            'emitente_nome',
+            'emitente_razao_social',
+            'razao_social',
+            'social_name',
+            'company_name',
+            'name',
+            'nome',
+            'xNome',
+        ), $document);
+        $societe->name = $name;
+        $societe->nom = $name;
+
+        $addressData = $this->extractAddressPayload($data);
+        $street = $this->extractString($addressData, array('street', 'logradouro', 'address', 'endereco'));
+        $number = $this->extractString($addressData, array('number', 'numero'));
+        $neighborhood = $this->extractString($addressData, array('neighborhood', 'bairro'));
+        $composed = trim(trim($street . ' ' . $number) . ' ' . $neighborhood);
+        if ($composed === '') {
+            $composed = $this->extractString($data, array('address', 'issuer_address'));
+        }
+        $societe->address = $composed;
+        $societe->zip = $this->extractString($addressData, array('zip', 'cep', 'postal_code', 'zipcode'));
+        $societe->town = $this->extractString($addressData, array('city', 'municipio', 'cidade', 'town'));
+        $societe->state_code = $this->extractString($addressData, array('state', 'uf', 'state_code', 'estado'));
+        $societe->country_code = $this->extractString($addressData, array('country', 'pais', 'country_code'));
+
+        $email = $this->extractString($data, array('email', 'issuer_email', 'emitente_email', 'contact_email'));
+        $societe->email = $email;
+
+        $societe->tva_intra = $document;
+        $societe->idprof2 = $document;
+        if (strlen($document) === 11) {
+            $societe->idprof1 = $document;
         }
 
-        $obj = $this->db->fetch_object($resql);
-        $this->db->free($resql);
+        if (method_exists($societe, 'getAvailableCode')) {
+            $code = $societe->getAvailableCode('fournisseur');
+            if (is_string($code) && $code !== '') {
+                $societe->code_fournisseur = $code;
+            }
+        }
 
-        return $obj ? (int) $obj->rowid : 0;
+        $note = 'Automatically created by Focus Science importer';
+        if (!empty($societe->note_private)) {
+            $societe->note_private .= "\n" . $note;
+        } else {
+            $societe->note_private = $note;
+        }
+
+        if ($societe->create($user) <= 0) {
+            throw new RuntimeException($societe->error ?: 'Unable to create thirdparty');
+        }
+
+        if (!empty($societe->id)) {
+            return (int) $societe->id;
+        }
+
+        if (!empty($societe->rowid)) {
+            return (int) $societe->rowid;
+        }
+
+        return 0;
     }
 
     /**
@@ -532,10 +590,6 @@ class FvFiscalScienceImporter
      */
     private function maybeCreateSupplierInvoice(User $user, FvNfeIn $nfe, array $data)
     {
-        if ($nfe->fk_soc <= 0) {
-            return 0;
-        }
-
         if (empty($data['items']) || !is_array($data['items'])) {
             return 0;
         }
@@ -787,6 +841,47 @@ class FvFiscalScienceImporter
     }
 
     /**
+     * Attempt to find existing thirdparty matching the provided identifier.
+     *
+     * @param string $document
+     * @return int
+     */
+    protected function findThirdpartyIdByDocument($document)
+    {
+        if ($document === '') {
+            return 0;
+        }
+
+        $sql = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "societe";
+        $sql .= ' WHERE entity IN (' . getEntity('societe') . ')';
+        $escaped = $this->db->escape($document);
+        $sql .= " AND (tva_intra = '" . $escaped . "'";
+        $sql .= " OR idprof1 = '" . $escaped . "'";
+        $sql .= " OR idprof2 = '" . $escaped . "')";
+        $sql .= ' ORDER BY rowid ASC LIMIT 1';
+
+        $resql = $this->db->query($sql);
+        if (!$resql) {
+            return 0;
+        }
+
+        $obj = $this->db->fetch_object($resql);
+        $this->db->free($resql);
+
+        return $obj ? (int) $obj->rowid : 0;
+    }
+
+    /**
+     * Instantiate Societe object, allowing overrides during testing.
+     *
+     * @return Societe
+     */
+    protected function instantiateSociete()
+    {
+        return new Societe($this->db);
+    }
+
+    /**
      * Parse numeric values from payload.
      *
      * @param array<string, mixed> $data
@@ -843,6 +938,9 @@ class FvFiscalScienceImporter
             if (!isset($data[$key])) {
                 continue;
             }
+            if (is_array($data[$key])) {
+                continue;
+            }
             $value = trim((string) $data[$key]);
             if ($value !== '') {
                 return $value;
@@ -850,6 +948,54 @@ class FvFiscalScienceImporter
         }
 
         return $default;
+    }
+
+    /**
+     * Resolve best effort address payload from DF-e data.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function extractAddressPayload(array $data)
+    {
+        $candidates = array();
+        foreach (array('address', 'issuer_address', 'emitente_endereco', 'ender_emit', 'endereco') as $key) {
+            if (!empty($data[$key]) && is_array($data[$key])) {
+                $candidates[] = $data[$key];
+            }
+        }
+
+        if (!empty($data['issuer']) && is_array($data['issuer']) && !empty($data['issuer']['address']) && is_array($data['issuer']['address'])) {
+            $candidates[] = $data['issuer']['address'];
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_array($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return array();
+    }
+
+    /**
+     * Normalize document identifiers by stripping non-numeric characters.
+     *
+     * @param string $value
+     * @return string
+     */
+    protected function normalizeDocument($value)
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/[^0-9]/', '', (string) $value);
+        if (!is_string($normalized)) {
+            return '';
+        }
+
+        return $normalized;
     }
 
     /**
