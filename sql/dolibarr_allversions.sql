@@ -201,6 +201,17 @@ CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
     issue_at DATETIME,
     mdfe_key VARCHAR(60),
     protocol_number VARCHAR(64),
+    vehicle_plate VARCHAR(16),
+    vehicle_rntrc VARCHAR(32),
+    driver_name VARCHAR(128),
+    driver_document VARCHAR(32),
+    origin_city VARCHAR(128),
+    origin_state VARCHAR(4),
+    destination_city VARCHAR(128),
+    destination_state VARCHAR(4),
+    closure_at DATETIME,
+    closure_city VARCHAR(128),
+    closure_state VARCHAR(4),
     total_ctes INTEGER DEFAULT 0,
     total_weight NUMERIC(24,8) DEFAULT 0,
     total_value NUMERIC(24,8) DEFAULT 0,
@@ -216,6 +227,18 @@ CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
     FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
     FOREIGN KEY(fk_batch_export) REFERENCES llx_fv_batch_export(rowid),
     FOREIGN KEY(fk_focus_job) REFERENCES llx_fv_focus_job(rowid)
+);
+
+CREATE TABLE IF NOT EXISTS llx_fv_mdfe_nfe (
+    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    fk_mdfe INTEGER NOT NULL,
+    fk_nfeout INTEGER NOT NULL,
+    created_at DATETIME,
+    UNIQUE unique_fv_mdfe_nfe (fk_mdfe, fk_nfeout),
+    INDEX idx_fv_mdfe_nfe_mdfe (fk_mdfe),
+    INDEX idx_fv_mdfe_nfe_nfe (fk_nfeout),
+    FOREIGN KEY(fk_mdfe) REFERENCES llx_fv_mdfe(rowid),
+    FOREIGN KEY(fk_nfeout) REFERENCES llx_fv_nfe_out(rowid)
 );
 
 CREATE INDEX IF NOT EXISTS idx_fv_nfe_out_fk_soc ON llx_fv_nfe_out(fk_soc);
