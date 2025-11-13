@@ -10,6 +10,16 @@ require_once __DIR__ . '/FvNfeOutLine.class.php';
  */
 class FvNfeOut extends CommonObject
 {
+    public const STATUS_DRAFT = 0;
+
+    public const STATUS_PROCESSING = 1;
+
+    public const STATUS_AUTHORIZED = 2;
+
+    public const STATUS_ERROR = 3;
+
+    public const STATUS_CANCELLED = 4;
+
     /** @var string */
     public $element = 'fvnfeout';
 
@@ -38,7 +48,7 @@ class FvNfeOut extends CommonObject
     public $fields = array(
         'rowid' => array('type' => 'integer', 'label' => 'TechnicalID', 'enabled' => 1, 'visible' => -1, 'notnull' => 1, 'index' => 1, 'position' => 1),
         'entity' => array('type' => 'integer', 'label' => 'Entity', 'enabled' => 1, 'visible' => -1, 'notnull' => 1, 'default' => 1, 'position' => 5),
-        'status' => array('type' => 'smallint', 'label' => 'Status', 'enabled' => 1, 'visible' => 1, 'position' => 10, 'default' => 0, 'notnull' => 1),
+        'status' => array('type' => 'smallint', 'label' => 'Status', 'enabled' => 1, 'visible' => 1, 'position' => 10, 'default' => self::STATUS_DRAFT, 'notnull' => 1),
         'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'enabled' => 1, 'visible' => 1, 'index' => 1, 'position' => 15),
         'ref_ext' => array('type' => 'varchar(128)', 'label' => 'RefExt', 'enabled' => 1, 'visible' => 0, 'position' => 18),
         'fk_soc' => array('type' => 'integer', 'label' => 'ThirdParty', 'enabled' => 1, 'visible' => 1, 'position' => 20, 'notnull' => 1, 'foreignkey' => 'societe.rowid'),
@@ -85,6 +95,113 @@ class FvNfeOut extends CommonObject
         $this->fk_user_create = $user->id;
 
         return $this->createCommon($user, $notrigger);
+    }
+
+    /**
+     * Retrieve translated status labels.
+     *
+     * @param Translate $langs
+     * @return array<int, string>
+     */
+    public static function getStatusLabels($langs)
+    {
+        return array(
+            self::STATUS_DRAFT => $langs->trans('FvFiscalNfeOutStatusPending'),
+            self::STATUS_PROCESSING => $langs->trans('FvFiscalNfeOutStatusProcessing'),
+            self::STATUS_AUTHORIZED => $langs->trans('FvFiscalNfeOutStatusAuthorized'),
+            self::STATUS_ERROR => $langs->trans('FvFiscalNfeOutStatusError'),
+            self::STATUS_CANCELLED => $langs->trans('FvFiscalNfeOutStatusCancelled'),
+        );
+    }
+
+    /**
+     * Resolve translated label for current status.
+     *
+     * @param Translate $langs
+     * @return string
+     */
+    public function getStatusLabel($langs)
+    {
+        $labels = self::getStatusLabels($langs);
+
+        return isset($labels[(int) $this->status]) ? $labels[(int) $this->status] : $langs->trans('Unknown');
+    }
+
+    /**
+     * Determine if document is still pending authorization.
+     *
+     * @return bool
+     */
+    public function isDraft()
+    {
+        return (int) $this->status === self::STATUS_DRAFT || (int) $this->status === self::STATUS_PROCESSING;
+    }
+
+    /**
+     * Determine if document has been authorized by SEFAZ.
+     *
+     * @return bool
+     */
+    public function isAuthorized()
+    {
+        return (int) $this->status === self::STATUS_AUTHORIZED;
+    }
+
+    /**
+     * Determine if document has been cancelled.
+     *
+     * @return bool
+     */
+    public function isCancelled()
+    {
+        return (int) $this->status === self::STATUS_CANCELLED;
+    }
+
+    /**
+     * Check if cancellation can be requested.
+     *
+     * @return bool
+     */
+    public function canSendCancellation()
+    {
+        return $this->isAuthorized();
+    }
+
+    /**
+     * Check if a correction letter can be emitted.
+     *
+     * @return bool
+     */
+    public function canSendCorrection()
+    {
+        return $this->isAuthorized();
+    }
+
+    /**
+     * Retrieve a human readable identifier for the document.
+     *
+     * @return string
+     */
+    public function getDisplayLabel()
+    {
+        $parts = array();
+        if (!empty($this->series)) {
+            $parts[] = $this->series;
+        }
+        if (!empty($this->document_number)) {
+            $parts[] = $this->document_number;
+        }
+        if (!empty($parts)) {
+            return implode('/', $parts);
+        }
+        if (!empty($this->ref)) {
+            return $this->ref;
+        }
+        if (!empty($this->nfe_key)) {
+            return $this->nfe_key;
+        }
+
+        return (string) $this->id;
     }
 
     /**

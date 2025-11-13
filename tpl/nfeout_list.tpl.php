@@ -7,9 +7,13 @@ if (!defined('DOL_DOCUMENT_ROOT')) {
     exit;
 }
 
-global $conf, $form, $langs, $nfeOutStatic;
+global $conf, $form, $langs, $nfeOutStatic, $formconfirm, $canManageFocus, $param;
 
 print load_fiche_titre($langs->trans('FvFiscalNfeOutListTitle'), '', 'fvfiscal.png@fvfiscal');
+
+if (!empty($formconfirm)) {
+    print $formconfirm;
+}
 
 print '<div class="fichecenter">';
 print '<div class="box-flex">';
@@ -87,6 +91,9 @@ print_liste_field_titre($langs->trans('FvFiscalNfeOutRecipient'), $_SERVER['PHP_
 print_liste_field_titre($langs->trans('Date'), $_SERVER['PHP_SELF'], 'o.issue_at', '', $param, '', $sortfield, $sortorder, 'center');
 print_liste_field_titre($langs->trans('AmountTTC'), $_SERVER['PHP_SELF'], 'o.total_amount', '', $param, '', $sortfield, $sortorder, 'right');
 print_liste_field_titre($langs->trans('Status'), $_SERVER['PHP_SELF'], 'o.status', '', $param, '', $sortfield, $sortorder, 'center');
+if (!empty($canManageFocus)) {
+    print '<th class="center">' . dol_escape_htmltag($langs->trans('Actions')) . '</th>';
+}
 print '</tr>';
 
 foreach ($records as $record) {
@@ -116,11 +123,29 @@ foreach ($records as $record) {
     print '<td class="right">' . price($record['total_amount']) . '</td>';
     $statusValue = isset($statusLabels[$record['status']]) ? $statusLabels[$record['status']] : $langs->trans('Unknown');
     print '<td class="center">' . dol_escape_htmltag($statusValue) . '</td>';
+    if (!empty($canManageFocus)) {
+        print '<td class="center nowrap">';
+        $actions = array();
+        $baseUrl = $_SERVER['PHP_SELF'];
+        $query = $param !== '' ? $param . '&' : '';
+        $query .= 'nfe_id=' . ((int) $record['id']);
+        if ((int) $record['status'] === FvNfeOut::STATUS_AUTHORIZED) {
+            $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=cancel_nfe&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionCancel')) . '</a>';
+            $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=send_cce&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionCce')) . '</a>';
+        }
+        if (empty($actions)) {
+            print '<span class="opacitymedium">-</span>';
+        } else {
+            print implode(' ', $actions);
+        }
+        print '</td>';
+    }
     print '</tr>';
 }
 
 if (empty($records)) {
-    print '<tr class="oddeven"><td colspan="6" class="opacitymedium">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutEmpty')) . '</td></tr>';
+    $colspan = !empty($canManageFocus) ? 7 : 6;
+    print '<tr class="oddeven"><td colspan="' . ((int) $colspan) . '" class="opacitymedium">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutEmpty')) . '</td></tr>';
 }
 
 print '</table>';

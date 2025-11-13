@@ -61,7 +61,9 @@ if (!$res) {
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/date.lib.php';
 require_once __DIR__.'/class/FvNfeOut.class.php';
+require_once __DIR__.'/class/FvNfeEvent.class.php';
 require_once __DIR__.'/lib/fvfiscal_permissions.php';
+require_once __DIR__.'/lib/fvfiscal_focus.lib.php';
 
 /** @var DoliDB $db */
 /** @var Translate $langs */
@@ -208,15 +210,15 @@ $summary = array(
     'pending' => array('label' => $langs->trans('FvFiscalNfeOutSummaryPending'), 'count' => 0, 'amount' => 0.0),
 );
 
-if (!empty($summaryByStatus[2])) {
-    $summary['authorized']['count'] = $summaryByStatus[2]['count'];
-    $summary['authorized']['amount'] = $summaryByStatus[2]['amount'];
+if (!empty($summaryByStatus[FvNfeOut::STATUS_AUTHORIZED])) {
+    $summary['authorized']['count'] = $summaryByStatus[FvNfeOut::STATUS_AUTHORIZED]['count'];
+    $summary['authorized']['amount'] = $summaryByStatus[FvNfeOut::STATUS_AUTHORIZED]['amount'];
 }
-if (!empty($summaryByStatus[4])) {
-    $summary['cancelled']['count'] = $summaryByStatus[4]['count'];
-    $summary['cancelled']['amount'] = $summaryByStatus[4]['amount'];
+if (!empty($summaryByStatus[FvNfeOut::STATUS_CANCELLED])) {
+    $summary['cancelled']['count'] = $summaryByStatus[FvNfeOut::STATUS_CANCELLED]['count'];
+    $summary['cancelled']['amount'] = $summaryByStatus[FvNfeOut::STATUS_CANCELLED]['amount'];
 }
-$pendingStatuses = array(0, 1);
+$pendingStatuses = array(FvNfeOut::STATUS_DRAFT, FvNfeOut::STATUS_PROCESSING);
 foreach ($pendingStatuses as $pendingStatus) {
     if (!empty($summaryByStatus[$pendingStatus])) {
         $summary['pending']['count'] += $summaryByStatus[$pendingStatus]['count'];
@@ -252,13 +254,7 @@ if ($resql) {
     setEventMessages($db->lasterror(), null, 'errors');
 }
 
-$statusLabels = array(
-    0 => $langs->trans('FvFiscalNfeOutStatusPending'),
-    1 => $langs->trans('FvFiscalNfeOutStatusProcessing'),
-    2 => $langs->trans('FvFiscalNfeOutStatusAuthorized'),
-    3 => $langs->trans('FvFiscalNfeOutStatusError'),
-    4 => $langs->trans('FvFiscalNfeOutStatusCancelled'),
-);
+$statusLabels = FvNfeOut::getStatusLabels($langs);
 
 $paramParts = array();
 if ($statusFilter !== null) {
@@ -280,6 +276,147 @@ if (!empty($socid)) {
     $paramParts[] = 'socid=' . urlencode((string) $socid);
 }
 $param = implode('&', $paramParts);
+
+$canManageFocus = $user->hasRight(
+    FvFiscalPermissions::MODULE,
+    FvFiscalPermissions::BATCH,
+    FvFiscalPermissions::BATCH_WRITE
+);
+
+if (!$canManageFocus && in_array($action, array('cancel_nfe', 'confirm_cancel_nfe', 'send_cce', 'confirm_send_cce'), true)) {
+    accessforbidden();
+}
+
+$formconfirm = '';
+$redirectBase = $_SERVER['PHP_SELF'] . ($param ? '?' . $param : '');
+if ($canManageFocus) {
+    $confirm = GETPOST('confirm', 'alpha');
+    $nfeId = GETPOSTINT('nfe_id');
+    if ($action === 'confirm_cancel_nfe' && $confirm === 'yes' && $nfeId > 0) {
+        $submittedToken = GETPOST('token', 'aZ09');
+        if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
+            accessforbidden();
+        }
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $justification = GETPOST('justification', 'restricthtml');
+            $gateway = new FvFocusGateway($db, $conf, $langs);
+            $result = $gateway->cancelOutboundNfe($user, $document, $justification);
+            if ($result instanceof FvNfeEvent) {
+                $protocol = $result->protocol_number ?: $document->protocol_number;
+                $label = $document->getDisplayLabel();
+                if ($protocol === '') {
+                    $protocol = $langs->trans('Unknown');
+                }
+                setEventMessages($langs->trans('FvFiscalNfeOutCancelSuccess', $label, $protocol), null, 'mesgs');
+                setEventMessages($langs->trans('FvFiscalNfeOutCancelWarning'), null, 'warnings');
+                header('Location: ' . $redirectBase);
+                exit;
+            }
+
+            setEventMessages($langs->trans('FvFiscalFocusApiError', $gateway->error ?: $langs->trans('Error')), $gateway->errors, 'errors');
+        } else {
+            setEventMessages($langs->trans('ErrorRecordNotFound'), null, 'errors');
+        }
+        header('Location: ' . $redirectBase);
+        exit;
+    }
+
+    if ($action === 'confirm_send_cce' && $confirm === 'yes' && $nfeId > 0) {
+        $submittedToken = GETPOST('token', 'aZ09');
+        if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
+            accessforbidden();
+        }
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $text = GETPOST('correction_text', 'restricthtml');
+            $gateway = new FvFocusGateway($db, $conf, $langs);
+            $result = $gateway->sendCorrectionLetter($user, $document, $text);
+            if ($result instanceof FvNfeEvent) {
+                $protocol = $result->protocol_number ?: '';
+                $label = $document->getDisplayLabel();
+                if ($protocol === '') {
+                    $protocol = $langs->trans('Unknown');
+                }
+                setEventMessages($langs->trans('FvFiscalNfeOutCceSuccess', $label, $protocol), null, 'mesgs');
+                header('Location: ' . $redirectBase);
+                exit;
+            }
+
+            setEventMessages($langs->trans('FvFiscalFocusApiError', $gateway->error ?: $langs->trans('Error')), $gateway->errors, 'errors');
+        } else {
+            setEventMessages($langs->trans('ErrorRecordNotFound'), null, 'errors');
+        }
+        header('Location: ' . $redirectBase);
+        exit;
+    }
+
+    if ($action === 'cancel_nfe' && $nfeId > 0) {
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $formQuestions = array(
+                array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+                array(
+                    'type' => 'textarea',
+                    'name' => 'justification',
+                    'label' => $langs->trans('FvFiscalNfeOutCancelJustification'),
+                    'value' => '',
+                    'required' => 'required',
+                    'moreattr' => 'minlength="15" maxlength="1000"',
+                ),
+            );
+            $label = $document->getDisplayLabel();
+            $formconfirm = $form->formconfirm(
+                $redirectBase,
+                $langs->trans('FvFiscalNfeOutCancelConfirmTitle', $label),
+                $langs->trans('FvFiscalNfeOutCancelConfirmQuestion', $label),
+                'confirm_cancel_nfe',
+                $formQuestions,
+                0,
+                0,
+                0,
+                '',
+                '',
+                '',
+                '',
+                ''
+            );
+        }
+    }
+
+    if ($action === 'send_cce' && $nfeId > 0) {
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $formQuestions = array(
+                array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+                array(
+                    'type' => 'textarea',
+                    'name' => 'correction_text',
+                    'label' => $langs->trans('FvFiscalNfeOutCceText'),
+                    'value' => '',
+                    'required' => 'required',
+                    'moreattr' => 'minlength="15" maxlength="1000"',
+                ),
+            );
+            $label = $document->getDisplayLabel();
+            $formconfirm = $form->formconfirm(
+                $redirectBase,
+                $langs->trans('FvFiscalNfeOutCceConfirmTitle', $label),
+                $langs->trans('FvFiscalNfeOutCceConfirmQuestion', $label),
+                'confirm_send_cce',
+                $formQuestions,
+                0,
+                0,
+                0,
+                '',
+                '',
+                '',
+                '',
+                ''
+            );
+        }
+    }
+}
 
 $nfeOutStatic = new FvNfeOut($db);
 
