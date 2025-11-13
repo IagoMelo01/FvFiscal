@@ -117,3 +117,24 @@ FvFiscalNfeOutSummaryPending = Pending
 FvFiscalNfeOutSearchPlaceholder = Search customer or NF-e key
 FvFiscalNfeOutEmpty = No NF-e documents match the selected filters.
 FvFiscalNfeOutMenu = Notas Fiscais
+FvFiscalNfeOutActionCancel = Cancel NF-e
+FvFiscalNfeOutActionCce = Send CC-e
+FvFiscalNfeOutCancelConfirmTitle = Cancel NF-e %s
+FvFiscalNfeOutCancelConfirmQuestion = Provide a justification to cancel NF-e %s.
+FvFiscalNfeOutCancelJustification = Cancellation justification
+FvFiscalNfeOutCceConfirmTitle = Send CC-e for NF-e %s
+FvFiscalNfeOutCceConfirmQuestion = Provide the correction text to send CC-e for NF-e %s.
+FvFiscalNfeOutCceText = Correction text
+FvFiscalNfeOutCancelSuccess = NF-e %s cancelled successfully. Protocol: %s.
+FvFiscalNfeOutCceSuccess = CC-e submitted for NF-e %s. Protocol: %s.
+FvFiscalNfeOutCancelWarning = Review financial or stock movements linked to this NF-e and reverse them manually if necessary.
+
+# Focus API interactions
+FvFiscalFocusApiError = Focus API error: %s
+FvFiscalFocusDocumentNotPersisted = Save the NF-e before requesting Focus actions.
+FvFiscalFocusNotAuthorizedForCancel = NF-e must be authorized before cancellation.
+FvFiscalFocusJustificationTooShort = Cancellation justification must contain at least %s characters.
+FvFiscalFocusMissingIdentifier = Unable to determine the Focus identifier for the selected NF-e.
+FvFiscalFocusNotAuthorizedForCce = NF-e must be authorized before a correction letter can be sent.
+FvFiscalFocusCorrectionTooShort = Correction text must contain at least %s characters.
+FvFiscalFocusCceDescription = Correction letter event

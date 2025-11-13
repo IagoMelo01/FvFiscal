@@ -7,6 +7,10 @@ require_once __DIR__ . '/../class/FvFocusJob.class.php';
 require_once __DIR__ . '/../class/FvJob.class.php';
 require_once __DIR__ . '/../class/FvJobLine.class.php';
 require_once __DIR__ . '/../class/FvPartnerProfile.class.php';
+require_once __DIR__ . '/../class/FvNfeOut.class.php';
+require_once __DIR__ . '/../class/FvNfeEvent.class.php';
+require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
+require_once DOL_DOCUMENT_ROOT . '/core/lib/geturl.lib.php';
 
 /**
  * Provide helper routines to validate and register Focus operations using Dolibarr objects.
@@ -312,12 +316,526 @@ class FvFocusGateway
     }
 
     /**
+     * Request NF-e cancellation through Focus endpoint.
+     *
+     * @param User     $user        Current user
+     * @param FvNfeOut $document    NF-e document
+     * @param string   $justification Cancellation justification text
+     * @return FvNfeEvent|int Event instance on success, <0 on error
+     */
+    public function cancelOutboundNfe($user, FvNfeOut $document, $justification)
+    {
+        $this->resetErrors();
+
+        if (empty($document->id)) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusDocumentNotPersisted') : 'NF-e record must be saved before requesting Focus operations';
+            return $this->failWith($message);
+        }
+        if (!$document->canSendCancellation()) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusNotAuthorizedForCancel') : 'Cancellation not allowed for this NF-e';
+            return $this->failWith($message);
+        }
+
+        $justification = trim((string) $justification);
+        if (dol_strlen($justification) < 15) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusJustificationTooShort', 15) : 'Justification must contain at least 15 characters';
+            return $this->failWith($message);
+        }
+
+        $identifier = $this->resolveNfeIdentifier($document);
+        if ($identifier === '') {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusMissingIdentifier') : 'Missing Focus identifier for NF-e';
+            return $this->failWith($message);
+        }
+
+        $payload = array(
+            'justificativa' => $justification,
+            'justification' => $justification,
+        );
+        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cancelar', $payload);
+        if ($response === null) {
+            return -1;
+        }
+
+        return $this->persistNfeEvent($user, $document, $payload, $response, 'cancel', FvNfeOut::STATUS_CANCELLED, 'cancelamento');
+    }
+
+    /**
+     * Send Carta de Correção (CC-e) event to Focus endpoint.
+     *
+     * @param User     $user     Current user
+     * @param FvNfeOut $document NF-e document
+     * @param string   $text     Correction text
+     * @return FvNfeEvent|int Event instance on success, <0 on error
+     */
+    public function sendCorrectionLetter($user, FvNfeOut $document, $text)
+    {
+        $this->resetErrors();
+
+        if (empty($document->id)) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusDocumentNotPersisted') : 'NF-e record must be saved before requesting Focus operations';
+            return $this->failWith($message);
+        }
+        if (!$document->canSendCorrection()) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusNotAuthorizedForCce') : 'Correction letter not allowed for this NF-e';
+            return $this->failWith($message);
+        }
+
+        $text = trim((string) $text);
+        if (dol_strlen($text) < 15) {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusCorrectionTooShort', 15) : 'Correction text must contain at least 15 characters';
+            return $this->failWith($message);
+        }
+
+        $identifier = $this->resolveNfeIdentifier($document);
+        if ($identifier === '') {
+            $message = $this->langs ? $this->langs->trans('FvFiscalFocusMissingIdentifier') : 'Missing Focus identifier for NF-e';
+            return $this->failWith($message);
+        }
+
+        $payload = array(
+            'correcao' => $text,
+            'correction' => $text,
+        );
+        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cartacorrecao', $payload);
+        if ($response === null) {
+            return -1;
+        }
+
+        return $this->persistNfeEvent($user, $document, $payload, $response, 'cce', FvNfeOut::STATUS_AUTHORIZED, 'cce');
+    }
+
+    /**
      * Reset error information.
      */
     private function resetErrors()
     {
         $this->error = '';
         $this->errors = array();
+    }
+
+    /**
+     * Determine identifier used to address the NF-e in Focus.
+     *
+     * @param FvNfeOut $document
+     * @return string
+     */
+    private function resolveNfeIdentifier(FvNfeOut $document)
+    {
+        if (!empty($document->ref)) {
+            return (string) $document->ref;
+        }
+        if (!empty($document->nfe_key)) {
+            return (string) $document->nfe_key;
+        }
+
+        return '';
+    }
+
+    /**
+     * Persist NF-e event and update related document.
+     *
+     * @param User     $user
+     * @param FvNfeOut $document
+     * @param array    $request
+     * @param array    $response
+     * @param string   $eventType
+     * @param int      $eventStatus
+     * @param string   $filenameHint
+     * @return FvNfeEvent|int
+     */
+    private function persistNfeEvent($user, FvNfeOut $document, array $request, array $response, $eventType, $eventStatus, $filenameHint)
+    {
+        $protocolKeys = array('numero_protocolo', 'protocolo', 'protocol_number', 'protocol');
+        $protocol = $this->extractString($response, $protocolKeys);
+
+        $jsonResponse = $this->encodeJson($response);
+
+        $this->db->begin();
+
+        if ($eventType === 'cancel') {
+            $document->status = FvNfeOut::STATUS_CANCELLED;
+            if ($protocol !== '') {
+                $document->protocol_number = $protocol;
+            }
+            if ($jsonResponse !== null) {
+                $document->json_response = $jsonResponse;
+            }
+            if ($document->update($user) < 0) {
+                $this->db->rollback();
+                return $this->failWith($document->error ?: 'NfeOutUpdateFailed', $document->errors);
+            }
+        } else {
+            if ($jsonResponse !== null && $jsonResponse !== $document->json_response) {
+                $document->json_response = $jsonResponse;
+                if ($document->update($user) < 0) {
+                    $this->db->rollback();
+                    return $this->failWith($document->error ?: 'NfeOutUpdateFailed', $document->errors);
+                }
+            }
+        }
+
+        $event = new FvNfeEvent($this->db);
+        $event->entity = $document->entity;
+        $event->status = $eventStatus;
+        $event->fk_nfeout = $document->id;
+        $event->event_type = $eventType;
+        $event->event_sequence = (int) ($response['event_sequence'] ?? $response['sequencia_evento'] ?? $response['sequencia'] ?? 1);
+        if (!empty($response['data_evento']) || !empty($response['received_at'])) {
+            $event->received_at = $this->parseDatetime($response['data_evento'] ?? $response['received_at']);
+        } elseif (!empty($response['timestamp'])) {
+            $event->received_at = $this->parseDatetime($response['timestamp']);
+        }
+        if (!empty($event->received_at) && $event->received_at <= 0) {
+            $event->received_at = null;
+        }
+        if (!empty($response['descricao_evento'])) {
+            $event->description = (string) $response['descricao_evento'];
+        } else {
+            $event->description = $this->extractString($response, array('mensagem_sefaz', 'motivo', 'message', 'descricao', 'mensagem'));
+        }
+        if ($event->description === '' && $eventType === 'cce' && $this->langs) {
+            $event->description = $this->langs->trans('FvFiscalFocusCceDescription');
+        }
+        if ($event->description === '' && $eventType === 'cancel' && $this->langs) {
+            $event->description = $this->langs->trans('FvFiscalNfeOutStatusCancelled');
+        }
+        if ($protocol !== '') {
+            $event->protocol_number = $protocol;
+        }
+        $event->json_payload = $this->encodeJson($request);
+        $event->json_response = $jsonResponse;
+
+        $eventId = $event->create($user);
+        if ($eventId <= 0) {
+            $this->db->rollback();
+            return $this->failWith($event->error ?: 'NfeEventCreateFailed', $event->errors);
+        }
+
+        $xmlKeys = array('xml', 'xml_cancelamento', 'xml_cancelado', 'arquivo_xml', 'xml_evento');
+        if ($eventType === 'cancel') {
+            array_unshift($xmlKeys, 'xml_cancelamento');
+        }
+        $xmlContent = $this->resolveXmlContent($response, $xmlKeys);
+        if ($xmlContent !== '') {
+            $fileSuffix = $protocol !== '' ? preg_replace('/[^A-Za-z0-9]/', '', $protocol) : '';
+            $filename = $filenameHint;
+            if ($fileSuffix !== '') {
+                $filename .= '-' . strtolower($fileSuffix);
+            }
+            $filename .= '.xml';
+            $relative = $this->storeDocumentContent('nfe_event', $eventId, $xmlContent, $filename);
+            if ($relative !== '') {
+                $event->xml_path = $relative;
+                if ($event->update($user) < 0) {
+                    $this->db->rollback();
+                    return $this->failWith($event->error ?: 'NfeEventUpdateFailed', $event->errors);
+                }
+            }
+        }
+
+        $this->db->commit();
+
+        return $event;
+    }
+
+    /**
+     * Perform HTTP request against Focus API.
+     *
+     * @param string $method
+     * @param string $path
+     * @param array  $payload
+     * @return array<string, mixed>|null
+     */
+    private function performFocusRequest($method, $path, array $payload = array())
+    {
+        $endpoint = $this->getFocusEndpoint();
+        if (empty($endpoint)) {
+            return null;
+        }
+
+        if (!function_exists('curl_init')) {
+            $this->failWith('Curl extension is required to contact Focus API');
+            return null;
+        }
+
+        $url = rtrim($endpoint, '/') . '/' . ltrim($path, '/');
+        $headers = array('Accept: application/json');
+        $token = $this->getFocusToken();
+        if ($token !== '') {
+            if (stripos($token, 'bearer ') === 0 || stripos($token, 'basic ') === 0) {
+                $headers[] = 'Authorization: ' . $token;
+            } else {
+                $headers[] = 'Authorization: Bearer ' . $token;
+            }
+        }
+
+        $body = '';
+        if (!empty($payload)) {
+            $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($body === false) {
+                $this->failWith('Unable to encode request payload to JSON');
+                return null;
+            }
+            $headers[] = 'Content-Type: application/json';
+        }
+
+        $curl = curl_init();
+        $method = strtoupper((string) $method);
+        $options = array(
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_HTTPHEADER => $headers,
+        );
+        if ($method === 'POST') {
+            $options[CURLOPT_POST] = true;
+        } else {
+            $options[CURLOPT_CUSTOMREQUEST] = $method;
+        }
+        if ($body !== '') {
+            $options[CURLOPT_POSTFIELDS] = $body;
+        }
+
+        curl_setopt_array($curl, $options);
+        $content = curl_exec($curl);
+        if ($content === false) {
+            $error = curl_error($curl);
+            $code = curl_errno($curl);
+            curl_close($curl);
+            $this->failWith('cURL error ' . $code . ': ' . $error);
+            return null;
+        }
+        $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if ($httpCode >= 400) {
+            $this->handleFocusErrorResponse($content, $httpCode);
+            return null;
+        }
+
+        if ($content === '' || $content === null) {
+            return array();
+        }
+
+        $decoded = json_decode($content, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->failWith('Invalid JSON from Focus: ' . json_last_error_msg());
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Handle HTTP error response from Focus service.
+     *
+     * @param string $content
+     * @param int    $httpCode
+     * @return int
+     */
+    private function handleFocusErrorResponse($content, $httpCode)
+    {
+        $details = array('HTTP ' . $httpCode);
+        $message = 'HTTP ' . $httpCode;
+        $content = (string) $content;
+        if ($content !== '') {
+            $decoded = json_decode($content, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $primary = $this->extractString($decoded, array('message', 'mensagem', 'error', 'motivo'));
+                if ($primary !== '') {
+                    $message .= ' - ' . $primary;
+                    $details[] = $primary;
+                }
+                if (!empty($decoded['erros']) && is_array($decoded['erros'])) {
+                    foreach ($decoded['erros'] as $error) {
+                        if (is_array($error)) {
+                            $details[] = implode(' - ', array_filter(array_map('strval', $error)));
+                        } elseif ($error !== '') {
+                            $details[] = (string) $error;
+                        }
+                    }
+                }
+            } else {
+                $details[] = $content;
+            }
+        }
+
+        $this->failWith($message, $details);
+
+        return -1;
+    }
+
+    /**
+     * Resolve XML content from Focus response.
+     *
+     * @param array<int|string, mixed> $response
+     * @param array<int, string>       $keys
+     * @return string
+     */
+    private function resolveXmlContent(array $response, array $keys)
+    {
+        foreach ($keys as $key) {
+            if (!empty($response[$key])) {
+                $content = $this->decodeXmlValue($response[$key]);
+                if ($content !== '') {
+                    return $content;
+                }
+            }
+        }
+
+        if (!empty($response['downloads']) && is_array($response['downloads'])) {
+            foreach ($keys as $key) {
+                if (!empty($response['downloads'][$key])) {
+                    $content = $this->decodeXmlValue($response['downloads'][$key]);
+                    if ($content !== '') {
+                        return $content;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Decode XML value that may be a URL or base64.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function decodeXmlValue($value)
+    {
+        $value = (string) $value;
+        if ($value === '') {
+            return '';
+        }
+        if (preg_match('/^https?:\/\//i', $value)) {
+            $result = getURLContent($value);
+            if (!empty($result['content'])) {
+                return (string) $result['content'];
+            }
+            return '';
+        }
+
+        $decoded = base64_decode($value, true);
+        if ($decoded !== false && trim($decoded) !== '') {
+            return $decoded;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Store XML payload under Dolibarr document root.
+     *
+     * @param string $subdir
+     * @param int    $id
+     * @param string $content
+     * @param string $filename
+     * @return string Relative path when stored
+     */
+    private function storeDocumentContent($subdir, $id, $content, $filename)
+    {
+        $content = (string) $content;
+        if ($content === '') {
+            return '';
+        }
+        $relativeBase = 'fvfiscal/' . $subdir . '/' . ((int) $id);
+        $absoluteBase = rtrim(DOL_DATA_ROOT, '/') . '/' . $relativeBase;
+        if (!dol_is_dir($absoluteBase)) {
+            dol_mkdir($absoluteBase);
+        }
+        $safeName = dol_sanitizeFileName($filename ?: 'document.xml');
+        if ($safeName === '') {
+            $safeName = 'document.xml';
+        }
+        $absolute = $absoluteBase . '/' . $safeName;
+        dol_file_put_contents($absolute, $content);
+
+        return $relativeBase . '/' . $safeName;
+    }
+
+    /**
+     * Extract first non-empty string from response array.
+     *
+     * @param array $data
+     * @param array $keys
+     * @return string
+     */
+    private function extractString(array $data, array $keys)
+    {
+        foreach ($keys as $key) {
+            if (isset($data[$key]) && $data[$key] !== '') {
+                return trim((string) $data[$key]);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Encode array as JSON string.
+     *
+     * @param array|null $data
+     * @return string|null
+     */
+    private function encodeJson($data)
+    {
+        if ($data === null) {
+            return null;
+        }
+
+        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            return null;
+        }
+
+        return $json;
+    }
+
+    /**
+     * Parse date/time coming from Focus payload.
+     *
+     * @param mixed $value
+     * @return int|null
+     */
+    private function parseDatetime($value)
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+        $timestamp = dol_stringtotime($value);
+        if ($timestamp > 0) {
+            return $timestamp;
+        }
+
+        return null;
+    }
+
+    /**
+     * Retrieve Focus API token from configuration.
+     *
+     * @return string
+     */
+    private function getFocusToken()
+    {
+        $token = '';
+        if (!empty($this->conf->global->FVFISCAL_FOCUS_TOKEN)) {
+            $token = $this->conf->global->FVFISCAL_FOCUS_TOKEN;
+        } elseif (($env = getenv('FV_FISCAL_FOCUS_TOKEN')) !== false) {
+            $token = (string) $env;
+        }
+
+        return trim((string) $token);
     }
 
     /**
