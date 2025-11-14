@@ -129,7 +129,12 @@ foreach ($records as $record) {
         $baseUrl = $_SERVER['PHP_SELF'];
         $query = $param !== '' ? $param . '&' : '';
         $query .= 'nfe_id=' . ((int) $record['id']);
-        if ((int) $record['status'] === FvNfeOut::STATUS_AUTHORIZED) {
+        if ((int) $record['status'] === FvNfeOut::STATUS_DRAFT) {
+            $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=issue_nfe&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionIssue')) . '</a>';
+            if (!empty($record['focus_job_id']) || !empty($record['has_payload']) || !empty($record['has_response'])) {
+                $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=reprocess_nfe&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionReprocess')) . '</a>';
+            }
+        } elseif ((int) $record['status'] === FvNfeOut::STATUS_AUTHORIZED) {
             $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=cancel_nfe&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionCancel')) . '</a>';
             $actions[] = '<a class="butAction smallpaddingimp" href="' . dol_escape_htmltag($baseUrl . '?action=send_cce&' . $query) . '">' . dol_escape_htmltag($langs->trans('FvFiscalNfeOutActionCce')) . '</a>';
         }

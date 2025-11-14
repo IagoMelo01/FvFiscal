@@ -158,6 +158,8 @@ FvFiscalNfeOutEmpty = No NF-e documents match the selected filters.
 FvFiscalNfeOutMenu = Notas Fiscais
 FvFiscalNfeOutActionCancel = Cancel NF-e
 FvFiscalNfeOutActionCce = Send CC-e
+FvFiscalNfeOutActionIssue = Issue NF-e
+FvFiscalNfeOutActionReprocess = Reprocess
 FvFiscalNfeOutCancelConfirmTitle = Cancel NF-e %s
 FvFiscalNfeOutCancelConfirmQuestion = Provide a justification to cancel NF-e %s.
 FvFiscalNfeOutCancelJustification = Cancellation justification
@@ -167,6 +169,12 @@ FvFiscalNfeOutCceText = Correction text
 FvFiscalNfeOutCancelSuccess = NF-e %s cancelled successfully. Protocol: %s.
 FvFiscalNfeOutCceSuccess = CC-e submitted for NF-e %s. Protocol: %s.
 FvFiscalNfeOutCancelWarning = Review financial or stock movements linked to this NF-e and reverse them manually if necessary.
+FvFiscalNfeOutIssueConfirmTitle = Issue NF-e %s
+FvFiscalNfeOutIssueConfirmQuestion = Send NF-e %s to Focus for authorization?
+FvFiscalNfeOutIssueSuccess = NF-e %s sent to Focus. Status: %s. Focus job: %s.
+FvFiscalNfeOutReprocessConfirmTitle = Reprocess NF-e %s
+FvFiscalNfeOutReprocessConfirmQuestion = Re-send NF-e %s to Focus using the stored payload?
+FvFiscalNfeOutReprocessSuccess = NF-e %s reprocessed. Status: %s. Focus job: %s.
 
 # Focus API interactions
 FvFiscalFocusApiError = Focus API error: %s
@@ -177,6 +185,11 @@ FvFiscalFocusMissingIdentifier = Unable to determine the Focus identifier for th
 FvFiscalFocusNotAuthorizedForCce = NF-e must be authorized before a correction letter can be sent.
 FvFiscalFocusCorrectionTooShort = Correction text must contain at least %s characters.
 FvFiscalFocusCceDescription = Correction letter event
+FvFiscalNfeOutNotPersisted = Save the NF-e before sending it to Focus.
+FvFiscalNfeOutCannotIssue = NF-e must be in draft status to be issued.
+FvFiscalNfeOutMissingSefazProfile = Select a SEFAZ profile before issuing the NF-e.
+FvFiscalNfeOutMissingRecipient = Provide recipient data before issuing the NF-e.
+FvFiscalNfeOutNoItems = Add at least one item before issuing the NF-e.
 
 # MDF-e
 FvFiscalMdfeListTitle = MDF-e manifests

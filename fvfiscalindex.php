@@ -64,6 +64,7 @@ require_once __DIR__.'/class/FvNfeOut.class.php';
 require_once __DIR__.'/class/FvNfeEvent.class.php';
 require_once __DIR__.'/lib/fvfiscal_permissions.php';
 require_once __DIR__.'/lib/fvfiscal_focus.lib.php';
+require_once __DIR__.'/lib/fvfiscal_nfe_focus_service.class.php';
 
 /** @var DoliDB $db */
 /** @var Translate $langs */
@@ -226,7 +227,7 @@ foreach ($pendingStatuses as $pendingStatus) {
     }
 }
 
-$sqlSelect = 'SELECT o.rowid, o.ref, o.document_number, o.series, o.nfe_key, o.issue_at, o.total_amount, o.status, s.nom as customer_name'
+$sqlSelect = 'SELECT o.rowid, o.ref, o.document_number, o.series, o.nfe_key, o.issue_at, o.total_amount, o.status, o.fk_focus_job, o.json_payload, o.json_response, s.nom as customer_name'
     . $sqlFrom . $sqlWhere;
 $sqlSelect .= ' ORDER BY ' . $sortfieldSql . ' ' . $sortorder;
 $sqlSelect .= $db->plimit($limit, $offset);
@@ -246,6 +247,9 @@ if ($resql) {
             'issue_at' => $db->jdate($obj->issue_at),
             'total_amount' => (float) $obj->total_amount,
             'status' => (int) $obj->status,
+            'focus_job_id' => (int) $obj->fk_focus_job,
+            'has_payload' => !empty($obj->json_payload),
+            'has_response' => !empty($obj->json_response),
             'customer_name' => $obj->customer_name,
         );
     }
@@ -283,7 +287,7 @@ $canManageFocus = $user->hasRight(
     FvFiscalPermissions::BATCH_WRITE
 );
 
-if (!$canManageFocus && in_array($action, array('cancel_nfe', 'confirm_cancel_nfe', 'send_cce', 'confirm_send_cce'), true)) {
+if (!$canManageFocus && in_array($action, array('cancel_nfe', 'confirm_cancel_nfe', 'send_cce', 'confirm_send_cce', 'issue_nfe', 'confirm_issue_nfe', 'reprocess_nfe', 'confirm_reprocess_nfe'), true)) {
     accessforbidden();
 }
 
@@ -351,6 +355,60 @@ if ($canManageFocus) {
         exit;
     }
 
+    if ($action === 'confirm_issue_nfe' && $confirm === 'yes' && $nfeId > 0) {
+        $submittedToken = GETPOST('token', 'aZ09');
+        if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
+            accessforbidden();
+        }
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, true) > 0) {
+            $service = new FvNfeFocusService($db, $conf, $langs);
+            $result = $service->submitDocument($document, $user);
+            if ($result instanceof FvNfeOut) {
+                $label = $document->getDisplayLabel();
+                $statusLabel = $document->getStatusLabel($langs);
+                $focusJob = (int) $document->fk_focus_job;
+                $jobLabel = $focusJob > 0 ? ('#' . $focusJob) : $langs->trans('Unknown');
+                setEventMessages($langs->trans('FvFiscalNfeOutIssueSuccess', $label, $statusLabel, $jobLabel), null, 'mesgs');
+                header('Location: ' . $redirectBase);
+                exit;
+            }
+
+            setEventMessages($langs->trans('FvFiscalFocusApiError', $service->error ?: $langs->trans('Error')), $service->errors, 'errors');
+        } else {
+            setEventMessages($langs->trans('ErrorRecordNotFound'), null, 'errors');
+        }
+        header('Location: ' . $redirectBase);
+        exit;
+    }
+
+    if ($action === 'confirm_reprocess_nfe' && $confirm === 'yes' && $nfeId > 0) {
+        $submittedToken = GETPOST('token', 'aZ09');
+        if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
+            accessforbidden();
+        }
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, true) > 0) {
+            $service = new FvNfeFocusService($db, $conf, $langs);
+            $result = $service->submitDocument($document, $user, true);
+            if ($result instanceof FvNfeOut) {
+                $label = $document->getDisplayLabel();
+                $statusLabel = $document->getStatusLabel($langs);
+                $focusJob = (int) $document->fk_focus_job;
+                $jobLabel = $focusJob > 0 ? ('#' . $focusJob) : $langs->trans('Unknown');
+                setEventMessages($langs->trans('FvFiscalNfeOutReprocessSuccess', $label, $statusLabel, $jobLabel), null, 'mesgs');
+                header('Location: ' . $redirectBase);
+                exit;
+            }
+
+            setEventMessages($langs->trans('FvFiscalFocusApiError', $service->error ?: $langs->trans('Error')), $service->errors, 'errors');
+        } else {
+            setEventMessages($langs->trans('ErrorRecordNotFound'), null, 'errors');
+        }
+        header('Location: ' . $redirectBase);
+        exit;
+    }
+
     if ($action === 'cancel_nfe' && $nfeId > 0) {
         $document = new FvNfeOut($db);
         if ($document->fetch($nfeId, null, false) > 0) {
@@ -404,6 +462,56 @@ if ($canManageFocus) {
                 $langs->trans('FvFiscalNfeOutCceConfirmTitle', $label),
                 $langs->trans('FvFiscalNfeOutCceConfirmQuestion', $label),
                 'confirm_send_cce',
+                $formQuestions,
+                0,
+                0,
+                0,
+                '',
+                '',
+                '',
+                '',
+                ''
+            );
+        }
+    }
+
+    if ($action === 'issue_nfe' && $nfeId > 0) {
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $formQuestions = array(
+                array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+            );
+            $label = $document->getDisplayLabel();
+            $formconfirm = $form->formconfirm(
+                $redirectBase,
+                $langs->trans('FvFiscalNfeOutIssueConfirmTitle', $label),
+                $langs->trans('FvFiscalNfeOutIssueConfirmQuestion', $label),
+                'confirm_issue_nfe',
+                $formQuestions,
+                0,
+                0,
+                0,
+                '',
+                '',
+                '',
+                '',
+                ''
+            );
+        }
+    }
+
+    if ($action === 'reprocess_nfe' && $nfeId > 0) {
+        $document = new FvNfeOut($db);
+        if ($document->fetch($nfeId, null, false) > 0) {
+            $formQuestions = array(
+                array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+            );
+            $label = $document->getDisplayLabel();
+            $formconfirm = $form->formconfirm(
+                $redirectBase,
+                $langs->trans('FvFiscalNfeOutReprocessConfirmTitle', $label),
+                $langs->trans('FvFiscalNfeOutReprocessConfirmQuestion', $label),
+                'confirm_reprocess_nfe',
                 $formQuestions,
                 0,
                 0,
