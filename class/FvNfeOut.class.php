@@ -138,6 +138,16 @@ class FvNfeOut extends CommonObject
     }
 
     /**
+     * Determine if the document can be submitted to Focus for authorization.
+     *
+     * @return bool
+     */
+    public function canIssue()
+    {
+        return (int) $this->status === self::STATUS_DRAFT;
+    }
+
+    /**
      * Determine if document has been authorized by SEFAZ.
      *
      * @return bool
