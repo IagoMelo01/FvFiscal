@@ -96,6 +96,39 @@ if (!$user->hasRight(
 
 $form = new Form($db);
 
+$certificateOptions = array();
+$now = dol_now();
+$sqlCertificate = 'SELECT rowid, ref, label, certificate_expire_at, status FROM ' . MAIN_DB_PREFIX . "fv_certificate";
+$sqlCertificate .= ' WHERE entity IN (' . getEntity('fv_certificate') . ')';
+$sqlCertificate .= ' AND status = 1';
+$sqlCertificate .= ' ORDER BY ref ASC';
+$resCert = $db->query($sqlCertificate);
+if ($resCert) {
+    while ($cert = $db->fetch_object($resCert)) {
+        $expiry = $db->jdate($cert->certificate_expire_at);
+        if ($expiry > 0 && $expiry < $now) {
+            continue;
+        }
+        $label = $cert->ref;
+        if (!empty($cert->label)) {
+            $label .= ' - ' . $cert->label;
+        }
+        if ($expiry > 0) {
+            $label .= ' (' . dol_print_date($expiry, 'day', 'tzuser') . ')';
+        }
+        $certificateOptions[(int) $cert->rowid] = $label;
+    }
+    $db->free($resCert);
+}
+
+if (empty($certificateOptions)) {
+    $managerUrl = dol_buildpath('/fvfiscal/certificate_list.php', 1);
+    $managerLink = '<a href="' . $managerUrl . '">' . $langs->trans('FvFiscalOpenCertificateManager') . '</a>';
+    setEventMessages($langs->trans('FvFiscalCertificateWarningNone', $managerLink), null, 'warnings');
+}
+
+$defaultCertificateId = !empty($conf->global->FVFISCAL_DEFAULT_CERTIFICATE) ? (int) $conf->global->FVFISCAL_DEFAULT_CERTIFICATE : 0;
+
 $limit = GETPOSTINT('limit');
 if ($limit <= 0) {
     $limit = empty($conf->liste_limit) ? 25 : (int) $conf->liste_limit;
@@ -360,10 +393,11 @@ if ($canManageFocus) {
         if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
             accessforbidden();
         }
+        $selectedCertificateId = GETPOST('certificate_id', 'int');
         $document = new FvNfeOut($db);
         if ($document->fetch($nfeId, null, true) > 0) {
             $service = new FvNfeFocusService($db, $conf, $langs);
-            $result = $service->submitDocument($document, $user);
+            $result = $service->submitDocument($document, $user, false, $selectedCertificateId);
             if ($result instanceof FvNfeOut) {
                 $label = $document->getDisplayLabel();
                 $statusLabel = $document->getStatusLabel($langs);
@@ -387,10 +421,11 @@ if ($canManageFocus) {
         if (empty($_SESSION['newtoken']) || $submittedToken !== $_SESSION['newtoken']) {
             accessforbidden();
         }
+        $selectedCertificateId = GETPOST('certificate_id', 'int');
         $document = new FvNfeOut($db);
         if ($document->fetch($nfeId, null, true) > 0) {
             $service = new FvNfeFocusService($db, $conf, $langs);
-            $result = $service->submitDocument($document, $user, true);
+            $result = $service->submitDocument($document, $user, true, $selectedCertificateId);
             if ($result instanceof FvNfeOut) {
                 $label = $document->getDisplayLabel();
                 $statusLabel = $document->getStatusLabel($langs);
@@ -478,8 +513,14 @@ if ($canManageFocus) {
     if ($action === 'issue_nfe' && $nfeId > 0) {
         $document = new FvNfeOut($db);
         if ($document->fetch($nfeId, null, false) > 0) {
+            $selectedCertificate = (int) ($document->fk_certificate ?: $defaultCertificateId);
             $formQuestions = array(
                 array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+                array(
+                    'type' => 'other',
+                    'label' => $langs->trans('FvFiscalCertificateSelect'),
+                    'value' => $form->selectarray('certificate_id', $certificateOptions, $selectedCertificate, 1),
+                ),
             );
             $label = $document->getDisplayLabel();
             $formconfirm = $form->formconfirm(
@@ -503,8 +544,14 @@ if ($canManageFocus) {
     if ($action === 'reprocess_nfe' && $nfeId > 0) {
         $document = new FvNfeOut($db);
         if ($document->fetch($nfeId, null, false) > 0) {
+            $selectedCertificate = (int) ($document->fk_certificate ?: $defaultCertificateId);
             $formQuestions = array(
                 array('type' => 'hidden', 'name' => 'nfe_id', 'value' => $nfeId),
+                array(
+                    'type' => 'other',
+                    'label' => $langs->trans('FvFiscalCertificateSelect'),
+                    'value' => $form->selectarray('certificate_id', $certificateOptions, $selectedCertificate, 1),
+                ),
             );
             $label = $document->getDisplayLabel();
             $formconfirm = $form->formconfirm(

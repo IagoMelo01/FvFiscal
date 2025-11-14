@@ -2,6 +2,25 @@
 -- Script run when an upgrade of Dolibarr is done. Whatever is the Dolibarr version.
 --
 
+CREATE TABLE IF NOT EXISTS llx_fv_certificate (
+    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    entity INTEGER NOT NULL DEFAULT 1,
+    status SMALLINT NOT NULL DEFAULT 0,
+    ref VARCHAR(128) NOT NULL,
+    label VARCHAR(255),
+    certificate_path VARCHAR(255) NOT NULL,
+    certificate_password VARCHAR(255),
+    certificate_expire_at DATETIME,
+    metadata_json TEXT,
+    note_public TEXT,
+    note_private TEXT,
+    created_at DATETIME,
+    updated_at DATETIME,
+    fk_user_create INTEGER,
+    fk_user_modif INTEGER,
+    UNIQUE(entity, ref)
+);
+
 CREATE TABLE IF NOT EXISTS llx_fv_sefaz_profile (
     rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
     entity INTEGER NOT NULL DEFAULT 1,
@@ -10,9 +29,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_sefaz_profile (
     name VARCHAR(255) NOT NULL,
     environment VARCHAR(32) NOT NULL DEFAULT 'production',
     email VARCHAR(255),
-    certificate_path VARCHAR(255),
-    certificate_password VARCHAR(128),
-    certificate_expire_at DATETIME,
+    fk_certificate INTEGER,
     tax_regime VARCHAR(64),
     tax_regime_detail VARCHAR(64),
     csc_id VARCHAR(32),
@@ -24,7 +41,8 @@ CREATE TABLE IF NOT EXISTS llx_fv_sefaz_profile (
     updated_at DATETIME,
     fk_user_create INTEGER,
     fk_user_modif INTEGER,
-    UNIQUE(entity, ref)
+    UNIQUE(entity, ref),
+    FOREIGN KEY(fk_certificate) REFERENCES llx_fv_certificate(rowid)
 );
 
 CREATE TABLE IF NOT EXISTS llx_fv_batch_export (
@@ -50,6 +68,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_focus_job (
     entity INTEGER NOT NULL DEFAULT 1,
     status SMALLINT NOT NULL DEFAULT 0,
     fk_sefaz_profile INTEGER,
+    fk_certificate INTEGER,
     job_type VARCHAR(32),
     remote_id VARCHAR(64),
     attempt_count INTEGER DEFAULT 0,
@@ -64,7 +83,8 @@ CREATE TABLE IF NOT EXISTS llx_fv_focus_job (
     fk_user_create INTEGER,
     fk_user_modif INTEGER,
     UNIQUE(entity, remote_id, job_type),
-    FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid)
+    FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
+    FOREIGN KEY(fk_certificate) REFERENCES llx_fv_certificate(rowid)
 );
 
 CREATE TABLE IF NOT EXISTS llx_fv_nfe_out (
@@ -76,6 +96,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_out (
     fk_soc INTEGER NOT NULL,
     fk_project INTEGER,
     fk_sefaz_profile INTEGER NOT NULL,
+    fk_certificate INTEGER,
     fk_batch_export INTEGER,
     fk_focus_job INTEGER,
     doc_type VARCHAR(32) NOT NULL DEFAULT 'nfe',
@@ -106,6 +127,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_out (
     fk_user_modif INTEGER,
     UNIQUE(entity, nfe_key),
     FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
+    FOREIGN KEY(fk_certificate) REFERENCES llx_fv_certificate(rowid),
     FOREIGN KEY(fk_batch_export) REFERENCES llx_fv_batch_export(rowid),
     FOREIGN KEY(fk_focus_job) REFERENCES llx_fv_focus_job(rowid)
 );
@@ -196,6 +218,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
     status SMALLINT NOT NULL DEFAULT 0,
     ref VARCHAR(128),
     fk_sefaz_profile INTEGER,
+    fk_certificate INTEGER,
     fk_batch_export INTEGER,
     fk_focus_job INTEGER,
     issue_at DATETIME,
@@ -225,6 +248,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
     fk_user_modif INTEGER,
     UNIQUE(entity, mdfe_key),
     FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
+    FOREIGN KEY(fk_certificate) REFERENCES llx_fv_certificate(rowid),
     FOREIGN KEY(fk_batch_export) REFERENCES llx_fv_batch_export(rowid),
     FOREIGN KEY(fk_focus_job) REFERENCES llx_fv_focus_job(rowid)
 );
