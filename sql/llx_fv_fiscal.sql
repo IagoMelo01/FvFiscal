@@ -18,6 +18,25 @@ CREATE TABLE llx_fv_partner_profile (
     KEY idx_fv_partner_profile_remote (remote_id)
 ) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE llx_fv_certificate (
+    rowid                 BIGINT AUTO_INCREMENT PRIMARY KEY,
+    entity                INTEGER      NOT NULL DEFAULT 1,
+    status                SMALLINT     NOT NULL DEFAULT 0,
+    ref                   VARCHAR(128) NOT NULL,
+    label                 VARCHAR(255),
+    certificate_path      VARCHAR(255) NOT NULL,
+    certificate_password  VARCHAR(255),
+    certificate_expire_at DATETIME,
+    metadata_json         MEDIUMTEXT,
+    note_public           MEDIUMTEXT,
+    note_private          MEDIUMTEXT,
+    created_at            DATETIME,
+    updated_at            DATETIME,
+    fk_user_create        INTEGER,
+    fk_user_modif         INTEGER,
+    UNIQUE KEY uk_fv_certificate_ref (entity, ref)
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE llx_fv_sefaz_profile (
     rowid                   BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity                  INTEGER      NOT NULL DEFAULT 1,
@@ -26,9 +45,7 @@ CREATE TABLE llx_fv_sefaz_profile (
     name                    VARCHAR(255) NOT NULL,
     environment             VARCHAR(32)  NOT NULL DEFAULT 'production',
     email                   VARCHAR(255),
-    certificate_path        VARCHAR(255),
-    certificate_password    VARCHAR(128),
-    certificate_expire_at   DATETIME,
+    fk_certificate          INTEGER,
     tax_regime              VARCHAR(64),
     tax_regime_detail       VARCHAR(64),
     csc_id                  VARCHAR(32),
@@ -40,7 +57,8 @@ CREATE TABLE llx_fv_sefaz_profile (
     updated_at              DATETIME,
     fk_user_create          INTEGER,
     fk_user_modif           INTEGER,
-    UNIQUE KEY uk_fv_sefaz_profile_ref (entity, ref)
+    UNIQUE KEY uk_fv_sefaz_profile_ref (entity, ref),
+    KEY idx_fv_sefaz_profile_certificate (fk_certificate)
 ) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE llx_fv_focus_job (
@@ -48,6 +66,7 @@ CREATE TABLE llx_fv_focus_job (
     entity            INTEGER      NOT NULL DEFAULT 1,
     status            SMALLINT     NOT NULL DEFAULT 0,
     fk_sefaz_profile  INTEGER,
+    fk_certificate    INTEGER,
     job_type          VARCHAR(32),
     remote_id         VARCHAR(64),
     attempt_count     INTEGER      NOT NULL DEFAULT 0,
@@ -62,6 +81,7 @@ CREATE TABLE llx_fv_focus_job (
     fk_user_create    INTEGER,
     fk_user_modif     INTEGER,
     KEY idx_fv_focus_job_sefaz (fk_sefaz_profile),
+    KEY idx_fv_focus_job_certificate (fk_certificate),
     KEY idx_fv_focus_job_remote (remote_id)
 ) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
@@ -72,6 +92,7 @@ CREATE TABLE llx_fv_batch (
     ref                 VARCHAR(128) NOT NULL,
     fk_partner_profile  INTEGER,
     fk_sefaz_profile    INTEGER,
+    fk_certificate      INTEGER,
     fk_focus_job        INTEGER,
     batch_type          VARCHAR(32),
     remote_id           VARCHAR(64),
@@ -87,6 +108,7 @@ CREATE TABLE llx_fv_batch (
     UNIQUE KEY uk_fv_batch_ref (entity, ref),
     KEY idx_fv_batch_partner (fk_partner_profile),
     KEY idx_fv_batch_sefaz (fk_sefaz_profile),
+    KEY idx_fv_batch_certificate (fk_certificate),
     KEY idx_fv_batch_focus (fk_focus_job),
     KEY idx_fv_batch_remote (remote_id)
 ) ENGINE=innodb DEFAULT CHARSET=utf8mb4;

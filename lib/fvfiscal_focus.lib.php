@@ -9,6 +9,7 @@ require_once __DIR__ . '/../class/FvJobLine.class.php';
 require_once __DIR__ . '/../class/FvPartnerProfile.class.php';
 require_once __DIR__ . '/../class/FvNfeOut.class.php';
 require_once __DIR__ . '/../class/FvNfeEvent.class.php';
+require_once __DIR__ . '/../class/FvCertificate.class.php';
 require_once __DIR__ . '/fvfiscal.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/geturl.lib.php';
@@ -79,6 +80,8 @@ class FvFocusGateway
 
         $this->db->begin();
 
+        $batchCertificate = (int) ($batch['fk_certificate'] ?? 0);
+
         $focusJob = $this->createFocusJob($user, 'batch.create', array(
             'endpoint' => $endpoint,
             'batch_type' => $batchType,
@@ -87,6 +90,7 @@ class FvFocusGateway
         ), array(
             'fk_sefaz_profile' => $batch['fk_sefaz_profile'] ?? 0,
             'scheduled_for' => $batch['scheduled_for'] ?? null,
+            'fk_certificate' => $batchCertificate,
         ));
         if (!$focusJob) {
             $this->db->rollback();
@@ -99,6 +103,7 @@ class FvFocusGateway
         $batchObject->ref = $batch['ref'] ?? '';
         $batchObject->fk_partner_profile = $profileId;
         $batchObject->fk_sefaz_profile = $batch['fk_sefaz_profile'] ?? 0;
+        $batchObject->fk_certificate = $batchCertificate;
         $batchObject->fk_focus_job = $focusJob->id;
         $batchObject->batch_type = $batchType;
         $batchObject->scheduled_for = $batch['scheduled_for'] ?? $focusJob->scheduled_for;
@@ -150,6 +155,8 @@ class FvFocusGateway
             return $this->failWith('BatchNotPersisted');
         }
 
+        $certificateForBatch = (int) ($payload['fk_certificate'] ?? $batch->fk_certificate ?? 0);
+
         $payload = array_merge(array(
             'endpoint' => $endpoint,
             'batch_id' => $batch->id,
@@ -159,12 +166,16 @@ class FvFocusGateway
         $focusJob = $this->createFocusJob($user, 'batch.dispatch', $payload, array(
             'fk_sefaz_profile' => $payload['fk_sefaz_profile'] ?? 0,
             'scheduled_for' => $payload['scheduled_for'] ?? null,
+            'fk_certificate' => $certificateForBatch,
         ));
         if (!$focusJob) {
             return -1;
         }
 
         $batch->fk_focus_job = $focusJob->id;
+        if ($certificateForBatch > 0) {
+            $batch->fk_certificate = $certificateForBatch;
+        }
         if (isset($payload['remote_id'])) {
             $batch->remote_id = $payload['remote_id'];
         }
@@ -211,6 +222,7 @@ class FvFocusGateway
             'response' => $response,
         ), array(
             'fk_sefaz_profile' => $batch->fk_sefaz_profile ?? 0,
+            'fk_certificate' => $batch->fk_certificate ?? 0,
         ));
         if (!$focusJob) {
             return -1;
@@ -353,7 +365,9 @@ class FvFocusGateway
             'justificativa' => $justification,
             'justification' => $justification,
         );
-        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cancelar', $payload);
+        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cancelar', $payload, array(
+            'fk_certificate' => (int) $document->fk_certificate,
+        ));
         if ($response === null) {
             return -1;
         }
@@ -398,7 +412,9 @@ class FvFocusGateway
             'correcao' => $text,
             'correction' => $text,
         );
-        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cartacorrecao', $payload);
+        $response = $this->performFocusRequest('POST', 'nfe/' . rawurlencode($identifier) . '/cartacorrecao', $payload, array(
+            'fk_certificate' => (int) $document->fk_certificate,
+        ));
         if ($response === null) {
             return -1;
         }
@@ -548,7 +564,7 @@ class FvFocusGateway
      * @param array  $payload
      * @return array<string, mixed>|null
      */
-    protected function performFocusRequest($method, $path, array $payload = array())
+    protected function performFocusRequest($method, $path, array $payload = array(), array $requestOptions = array())
     {
         $endpoint = $this->getFocusEndpoint();
         if (empty($endpoint)) {
@@ -583,7 +599,7 @@ class FvFocusGateway
 
         $curl = curl_init();
         $method = strtoupper((string) $method);
-        $options = array(
+        $curlOptions = array(
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 60,
@@ -591,15 +607,24 @@ class FvFocusGateway
             CURLOPT_HTTPHEADER => $headers,
         );
         if ($method === 'POST') {
-            $options[CURLOPT_POST] = true;
+            $curlOptions[CURLOPT_POST] = true;
         } else {
-            $options[CURLOPT_CUSTOMREQUEST] = $method;
+            $curlOptions[CURLOPT_CUSTOMREQUEST] = $method;
         }
         if ($body !== '') {
-            $options[CURLOPT_POSTFIELDS] = $body;
+            $curlOptions[CURLOPT_POSTFIELDS] = $body;
         }
 
-        curl_setopt_array($curl, $options);
+        $certOptions = $this->prepareCertificateCurlOptions((int) ($requestOptions['fk_certificate'] ?? 0));
+        if ($certOptions === false) {
+            curl_close($curl);
+            return null;
+        }
+        if (is_array($certOptions) && !empty($certOptions)) {
+            $curlOptions = $curlOptions + $certOptions;
+        }
+
+        curl_setopt_array($curl, $curlOptions);
         $content = curl_exec($curl);
         if ($content === false) {
             $error = curl_error($curl);
@@ -875,6 +900,9 @@ class FvFocusGateway
         if (!empty($options['fk_sefaz_profile'])) {
             $focusJob->fk_sefaz_profile = $options['fk_sefaz_profile'];
         }
+        if (!empty($options['fk_certificate'])) {
+            $focusJob->fk_certificate = $options['fk_certificate'];
+        }
         $focusJob->job_type = $type;
         $focusJob->payload_json = json_encode($payload);
         if (!empty($options['scheduled_for'])) {
@@ -887,6 +915,55 @@ class FvFocusGateway
         }
 
         return $focusJob;
+    }
+
+    /**
+     * Build cURL options to authenticate with a PKCS#12 certificate.
+     *
+     * @param int $certificateId
+     * @return array<int, mixed>|false
+     */
+    protected function prepareCertificateCurlOptions($certificateId)
+    {
+        if ($certificateId <= 0) {
+            return array();
+        }
+
+        $certificate = new FvCertificate($this->db);
+        if ($certificate->fetch($certificateId) <= 0) {
+            $this->failWith('CertificateNotFound');
+            return false;
+        }
+
+        $expiry = 0;
+        if (!empty($certificate->certificate_expire_at)) {
+            $expiry = $this->db->jdate($certificate->certificate_expire_at);
+        }
+        if ($expiry > 0 && $expiry < dol_now()) {
+            $this->failWith('CertificateExpired');
+            return false;
+        }
+
+        $path = fvfiscal_resolve_certificate_path($certificate->certificate_path);
+        if ($path === '' || !is_readable($path)) {
+            $this->failWith('CertificateFileMissing');
+            return false;
+        }
+
+        $password = '';
+        if (!empty($certificate->certificate_password)) {
+            $password = fvfiscal_decrypt_value($certificate->certificate_password);
+        }
+
+        $options = array(
+            CURLOPT_SSLCERT => $path,
+            CURLOPT_SSLCERTTYPE => 'P12',
+        );
+        if ($password !== '') {
+            $options[CURLOPT_SSLCERTPASSWD] = $password;
+        }
+
+        return $options;
     }
 
     /**

@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../class/FvFocusJob.class.php';
 require_once __DIR__ . '/../class/FvNfeIn.class.php';
+require_once __DIR__ . '/../class/FvCertificate.class.php';
 require_once __DIR__ . '/../lib/fvfiscal.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/price.lib.php';
 require_once DOL_DOCUMENT_ROOT . '/societe/class/societe.class.php';
@@ -750,13 +751,24 @@ class FvFiscalScienceImporter
         }
 
         $curl = curl_init();
-        curl_setopt_array($curl, array(
+        $curlOptions = array(
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_HTTPHEADER => $headers,
-        ));
+        );
+
+        $certOptions = $this->buildCertificateCurlOptions();
+        if ($certOptions === false) {
+            curl_close($curl);
+            throw new RuntimeException('No valid certificate available for Science importer');
+        }
+        if (!empty($certOptions)) {
+            $curlOptions = $curlOptions + $certOptions;
+        }
+
+        curl_setopt_array($curl, $curlOptions);
 
         $content = curl_exec($curl);
         if ($content === false) {
@@ -783,6 +795,72 @@ class FvFiscalScienceImporter
         }
 
         return $decoded;
+    }
+
+    /**
+     * Determine which certificate should be used for cURL requests.
+     *
+     * @return array<int, mixed>|false Array of cURL options, empty array for none, false on fatal error
+     */
+    private function buildCertificateCurlOptions()
+    {
+        $certificateId = $this->resolveCertificateId();
+        if ($certificateId <= 0) {
+            return array();
+        }
+
+        $certificate = new FvCertificate($this->db);
+        if ($certificate->fetch($certificateId) <= 0) {
+            dol_syslog(__METHOD__ . ': certificate ' . $certificateId . ' not found', LOG_ERR);
+            return false;
+        }
+
+        $expiry = 0;
+        if (!empty($certificate->certificate_expire_at)) {
+            $expiry = $this->db->jdate($certificate->certificate_expire_at);
+        }
+        if ($expiry > 0 && $expiry < dol_now()) {
+            dol_syslog(__METHOD__ . ': certificate ' . $certificateId . ' expired', LOG_ERR);
+            return false;
+        }
+
+        $path = fvfiscal_resolve_certificate_path($certificate->certificate_path);
+        if ($path === '' || !is_readable($path)) {
+            dol_syslog(__METHOD__ . ': certificate file missing for ' . $certificateId, LOG_ERR);
+            return false;
+        }
+
+        $password = '';
+        if (!empty($certificate->certificate_password)) {
+            $password = fvfiscal_decrypt_value($certificate->certificate_password);
+        }
+
+        $options = array(
+            CURLOPT_SSLCERT => $path,
+            CURLOPT_SSLCERTTYPE => 'P12',
+        );
+        if ($password !== '') {
+            $options[CURLOPT_SSLCERTPASSWD] = $password;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Resolve certificate ID from module configuration.
+     *
+     * @return int
+     */
+    private function resolveCertificateId()
+    {
+        if (!empty($this->conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID)) {
+            return (int) $this->conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID;
+        }
+        if (!empty($this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE)) {
+            return (int) $this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE;
+        }
+
+        return 0;
     }
 
     /**
