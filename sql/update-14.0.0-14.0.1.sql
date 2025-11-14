@@ -275,6 +275,29 @@ fv_ensure_index($db, 'fv_partner_profile', 'uk_fv_partner_profile_ref', 'UNIQUE 
 fv_ensure_index($db, 'fv_partner_profile', 'idx_fv_partner_profile_soc', 'INDEX idx_fv_partner_profile_soc (fk_soc)', $error);
 fv_ensure_index($db, 'fv_partner_profile', 'idx_fv_partner_profile_remote', 'INDEX idx_fv_partner_profile_remote (remote_id)', $error);
 
+// Ensure certificate table exists
+if (!dolibarr_tableexists($db, MAIN_DB_PREFIX . 'fv_certificate')) {
+    $sql = 'CREATE TABLE ' . MAIN_DB_PREFIX . "fv_certificate (";
+    $sql .= 'rowid INTEGER AUTO_INCREMENT PRIMARY KEY,';
+    $sql .= ' entity INTEGER NOT NULL DEFAULT 1,';
+    $sql .= ' status SMALLINT NOT NULL DEFAULT 0,';
+    $sql .= " ref VARCHAR(128) NOT NULL,";
+    $sql .= ' label VARCHAR(255),';
+    $sql .= " certificate_path VARCHAR(255) NOT NULL,";
+    $sql .= ' certificate_password VARCHAR(255),';
+    $sql .= ' certificate_expire_at DATETIME,';
+    $sql .= ' metadata_json TEXT,';
+    $sql .= ' note_public TEXT,';
+    $sql .= ' note_private TEXT,';
+    $sql .= ' created_at DATETIME,';
+    $sql .= ' updated_at DATETIME,';
+    $sql .= ' fk_user_create INTEGER,';
+    $sql .= ' fk_user_modif INTEGER,';
+    $sql .= ' UNIQUE(entity, ref)';
+    $sql .= ') ENGINE=innodb';
+    dolibarr_ifsql($sql, $error);
+}
+
 // Ensure SEFAZ profile schema
 fv_ensure_column($db, 'fv_sefaz_profile', 'entity', 'INTEGER NOT NULL DEFAULT 1', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'status', 'SMALLINT NOT NULL DEFAULT 0', $error);
@@ -282,9 +305,7 @@ fv_ensure_column($db, 'fv_sefaz_profile', 'ref', 'VARCHAR(128) NOT NULL', $error
 fv_ensure_column($db, 'fv_sefaz_profile', 'name', 'VARCHAR(255) NOT NULL', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'environment', "VARCHAR(32) NOT NULL DEFAULT 'production'", $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'email', 'VARCHAR(255)', $error);
-fv_ensure_column($db, 'fv_sefaz_profile', 'certificate_path', 'VARCHAR(255)', $error);
-fv_ensure_column($db, 'fv_sefaz_profile', 'certificate_password', 'VARCHAR(128)', $error);
-fv_ensure_column($db, 'fv_sefaz_profile', 'certificate_expire_at', 'DATETIME', $error);
+fv_ensure_column($db, 'fv_sefaz_profile', 'fk_certificate', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'tax_regime', 'VARCHAR(64)', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'tax_regime_detail', 'VARCHAR(64)', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'csc_id', 'VARCHAR(32)', $error);
@@ -298,11 +319,108 @@ fv_ensure_column($db, 'fv_sefaz_profile', 'fk_user_create', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_sefaz_profile', 'fk_user_modif', 'INTEGER', $error);
 
 fv_ensure_index($db, 'fv_sefaz_profile', 'uk_fv_sefaz_profile_ref', 'UNIQUE KEY uk_fv_sefaz_profile_ref (entity, ref)', $error);
+fv_ensure_index($db, 'fv_sefaz_profile', 'idx_fv_sefaz_profile_certificate', 'INDEX idx_fv_sefaz_profile_certificate (fk_certificate)', $error);
+
+// Migrate certificate data from SEFAZ profile table into new certificate table
+if (fv_column_exists($db, 'fv_sefaz_profile', 'certificate_path')) {
+    $sql = 'SELECT rowid, entity, ref, name, certificate_path, certificate_password, certificate_expire_at, fk_certificate';
+    $sql .= ' FROM ' . MAIN_DB_PREFIX . "fv_sefaz_profile";
+    $sql .= ' WHERE (certificate_path IS NOT NULL AND certificate_path <> \'\')';
+    $resql = $db->query($sql);
+    if ($resql) {
+        while ($obj = $db->fetch_object($resql)) {
+            if (!empty($obj->fk_certificate)) {
+                continue;
+            }
+
+            $certificatePath = trim((string) $obj->certificate_path);
+            if ($certificatePath === '') {
+                continue;
+            }
+
+            $existingId = 0;
+            $sqlCheck = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "fv_certificate";
+            $sqlCheck .= " WHERE entity = " . ((int) $obj->entity);
+            $sqlCheck .= " AND certificate_path = '" . $db->escape($certificatePath) . "'";
+            $sqlCheck .= ' LIMIT 1';
+            $resqlCheck = $db->query($sqlCheck);
+            if ($resqlCheck) {
+                $existing = $db->fetch_object($resqlCheck);
+                if ($existing) {
+                    $existingId = (int) $existing->rowid;
+                }
+                $db->free($resqlCheck);
+            }
+
+            $certId = $existingId;
+            if ($certId <= 0) {
+                $refBase = $obj->ref . '-CERT';
+                $refCandidate = $refBase;
+                $suffix = 1;
+                while (true) {
+                    $sqlRef = 'SELECT rowid FROM ' . MAIN_DB_PREFIX . "fv_certificate";
+                    $sqlRef .= " WHERE entity = " . ((int) $obj->entity);
+                    $sqlRef .= " AND ref = '" . $db->escape($refCandidate) . "'";
+                    $sqlRef .= ' LIMIT 1';
+                    $resRef = $db->query($sqlRef);
+                    if ($resRef && $db->num_rows($resRef) === 0) {
+                        if ($resRef) {
+                            $db->free($resRef);
+                        }
+                        break;
+                    }
+                    if ($resRef) {
+                        $db->free($resRef);
+                    }
+                    $suffix++;
+                    $refCandidate = $refBase . '-' . $suffix;
+                }
+
+                $sqlInsert = 'INSERT INTO ' . MAIN_DB_PREFIX . "fv_certificate";
+                $sqlInsert .= ' (entity, status, ref, label, certificate_path, certificate_password, certificate_expire_at, created_at, updated_at) VALUES (';
+                $sqlInsert .= ((int) $obj->entity) . ', 1, ';
+                $sqlInsert .= "'" . $db->escape($refCandidate) . "', ";
+                $label = $obj->name ?: $obj->ref;
+                $sqlInsert .= "'" . $db->escape($label) . "', ";
+                $sqlInsert .= "'" . $db->escape($certificatePath) . "', ";
+                if (!empty($obj->certificate_password)) {
+                    $sqlInsert .= "'" . $db->escape($obj->certificate_password) . "', ";
+                } else {
+                    $sqlInsert .= 'NULL, ';
+                }
+                if (!empty($obj->certificate_expire_at)) {
+                    $sqlInsert .= "'" . $db->escape($obj->certificate_expire_at) . "', ";
+                } else {
+                    $sqlInsert .= 'NULL, ';
+                }
+                $now = $db->idate(dol_now());
+                $sqlInsert .= "'" . $now . "', '" . $now . "')";
+
+                if ($db->query($sqlInsert)) {
+                    $certId = (int) $db->last_insert_id(MAIN_DB_PREFIX . 'fv_certificate');
+                }
+            }
+
+            if ($certId > 0) {
+                $sqlUpdate = 'UPDATE ' . MAIN_DB_PREFIX . "fv_sefaz_profile";
+                $sqlUpdate .= ' SET fk_certificate = ' . $certId;
+                $sqlUpdate .= ' WHERE rowid = ' . ((int) $obj->rowid);
+                $db->query($sqlUpdate);
+            }
+        }
+        $db->free($resql);
+    }
+
+    dolibarr_ifsql('ALTER TABLE ' . MAIN_DB_PREFIX . "fv_sefaz_profile DROP COLUMN certificate_path", $error);
+    dolibarr_ifsql('ALTER TABLE ' . MAIN_DB_PREFIX . "fv_sefaz_profile DROP COLUMN certificate_password", $error);
+    dolibarr_ifsql('ALTER TABLE ' . MAIN_DB_PREFIX . "fv_sefaz_profile DROP COLUMN certificate_expire_at", $error);
+}
 
 // Ensure Focus job schema
 fv_ensure_column($db, 'fv_focus_job', 'entity', 'INTEGER NOT NULL DEFAULT 1', $error);
 fv_ensure_column($db, 'fv_focus_job', 'status', 'SMALLINT NOT NULL DEFAULT 0', $error);
 fv_ensure_column($db, 'fv_focus_job', 'fk_sefaz_profile', 'INTEGER', $error);
+fv_ensure_column($db, 'fv_focus_job', 'fk_certificate', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_focus_job', 'job_type', 'VARCHAR(32)', $error);
 fv_ensure_column($db, 'fv_focus_job', 'remote_id', 'VARCHAR(64)', $error);
 fv_ensure_column($db, 'fv_focus_job', 'attempt_count', 'INTEGER NOT NULL DEFAULT 0', $error);
@@ -318,6 +436,7 @@ fv_ensure_column($db, 'fv_focus_job', 'fk_user_create', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_focus_job', 'fk_user_modif', 'INTEGER', $error);
 
 fv_ensure_index($db, 'fv_focus_job', 'idx_fv_focus_job_sefaz', 'INDEX idx_fv_focus_job_sefaz (fk_sefaz_profile)', $error);
+fv_ensure_index($db, 'fv_focus_job', 'idx_fv_focus_job_certificate', 'INDEX idx_fv_focus_job_certificate (fk_certificate)', $error);
 fv_ensure_index($db, 'fv_focus_job', 'idx_fv_focus_job_remote', 'INDEX idx_fv_focus_job_remote (remote_id)', $error);
 
 // Ensure Batch schema
@@ -326,6 +445,7 @@ fv_ensure_column($db, 'fv_batch', 'status', 'SMALLINT NOT NULL DEFAULT 0', $erro
 fv_ensure_column($db, 'fv_batch', 'ref', 'VARCHAR(128) NOT NULL', $error);
 fv_ensure_column($db, 'fv_batch', 'fk_partner_profile', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_batch', 'fk_sefaz_profile', 'INTEGER', $error);
+fv_ensure_column($db, 'fv_batch', 'fk_certificate', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_batch', 'fk_focus_job', 'INTEGER', $error);
 fv_ensure_column($db, 'fv_batch', 'batch_type', 'VARCHAR(32)', $error);
 fv_ensure_column($db, 'fv_batch', 'remote_id', 'VARCHAR(64)', $error);
@@ -342,8 +462,21 @@ fv_ensure_column($db, 'fv_batch', 'fk_user_modif', 'INTEGER', $error);
 fv_ensure_index($db, 'fv_batch', 'uk_fv_batch_ref', 'UNIQUE KEY uk_fv_batch_ref (entity, ref)', $error);
 fv_ensure_index($db, 'fv_batch', 'idx_fv_batch_partner', 'INDEX idx_fv_batch_partner (fk_partner_profile)', $error);
 fv_ensure_index($db, 'fv_batch', 'idx_fv_batch_sefaz', 'INDEX idx_fv_batch_sefaz (fk_sefaz_profile)', $error);
+fv_ensure_index($db, 'fv_batch', 'idx_fv_batch_certificate', 'INDEX idx_fv_batch_certificate (fk_certificate)', $error);
 fv_ensure_index($db, 'fv_batch', 'idx_fv_batch_focus', 'INDEX idx_fv_batch_focus (fk_focus_job)', $error);
 fv_ensure_index($db, 'fv_batch', 'idx_fv_batch_remote', 'INDEX idx_fv_batch_remote (remote_id)', $error);
+
+// Ensure NF-e outbound schema includes certificate
+if (dolibarr_tableexists($db, MAIN_DB_PREFIX . 'fv_nfe_out')) {
+    fv_ensure_column($db, 'fv_nfe_out', 'fk_certificate', 'INTEGER', $error);
+    fv_ensure_index($db, 'fv_nfe_out', 'idx_fv_nfe_out_certificate', 'INDEX idx_fv_nfe_out_certificate (fk_certificate)', $error);
+}
+
+// Ensure MDF-e schema includes certificate
+if (dolibarr_tableexists($db, MAIN_DB_PREFIX . 'fv_mdfe')) {
+    fv_ensure_column($db, 'fv_mdfe', 'fk_certificate', 'INTEGER', $error);
+    fv_ensure_index($db, 'fv_mdfe', 'idx_fv_mdfe_certificate', 'INDEX idx_fv_mdfe_certificate (fk_certificate)', $error);
+}
 
 // Ensure Batch line schema
 fv_ensure_column($db, 'fv_batch_line', 'entity', 'INTEGER NOT NULL DEFAULT 1', $error);

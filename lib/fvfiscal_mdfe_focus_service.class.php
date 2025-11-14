@@ -25,6 +25,14 @@ class FvMdfeFocusService extends FvFocusGateway
             return $this->failWith('FvFiscalMdfeNotPersisted');
         }
 
+        $certificateId = (int) $mdfe->fk_certificate;
+        if ($certificateId <= 0 && !empty($this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE)) {
+            $certificateId = (int) $this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE;
+        }
+        if ($certificateId <= 0) {
+            return $this->failWith('FvFiscalCertificateMissing');
+        }
+
         $payload = $this->buildCreatePayload($mdfe);
         if ($payload === null) {
             return -1;
@@ -37,6 +45,7 @@ class FvMdfeFocusService extends FvFocusGateway
             'payload' => $payload,
         ), array(
             'fk_sefaz_profile' => $mdfe->fk_sefaz_profile,
+            'fk_certificate' => $certificateId,
         ));
         if (!$job) {
             $this->db->rollback();
@@ -44,7 +53,9 @@ class FvMdfeFocusService extends FvFocusGateway
             return -1;
         }
 
-        $response = $this->performFocusRequest('POST', 'mdfe', $payload);
+        $response = $this->performFocusRequest('POST', 'mdfe', $payload, array(
+            'fk_certificate' => $certificateId,
+        ));
         if ($response === null) {
             $this->db->rollback();
 
@@ -53,6 +64,7 @@ class FvMdfeFocusService extends FvFocusGateway
 
         $this->applyResponseToMdfe($mdfe, $response);
         $mdfe->fk_focus_job = $job->id;
+        $mdfe->fk_certificate = $certificateId;
         $mdfe->status = $this->mapRemoteStatus($response['status'] ?? ($response['situacao'] ?? null), FvMdfe::STATUS_PROCESSING);
         $payloadJson = $this->encodeJson($payload);
         if ($payloadJson !== null) {
@@ -104,12 +116,23 @@ class FvMdfeFocusService extends FvFocusGateway
 
         $this->db->begin();
 
+        $certificateId = (int) $mdfe->fk_certificate;
+        if ($certificateId <= 0 && !empty($this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE)) {
+            $certificateId = (int) $this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE;
+        }
+        if ($certificateId <= 0) {
+            $this->db->rollback();
+            return $this->failWith('FvFiscalCertificateMissing');
+        }
+        $mdfe->fk_certificate = $certificateId;
+
         $job = $this->createFocusJob($user, 'mdfe.cancel', array(
             'mdfe_id' => $mdfe->id,
             'identifier' => $identifier,
             'payload' => $payload,
         ), array(
             'fk_sefaz_profile' => $mdfe->fk_sefaz_profile,
+            'fk_certificate' => $certificateId,
         ));
         if (!$job) {
             $this->db->rollback();
@@ -117,7 +140,9 @@ class FvMdfeFocusService extends FvFocusGateway
             return -1;
         }
 
-        $response = $this->performFocusRequest('POST', 'mdfe/' . rawurlencode($identifier) . '/cancelar', $payload);
+        $response = $this->performFocusRequest('POST', 'mdfe/' . rawurlencode($identifier) . '/cancelar', $payload, array(
+            'fk_certificate' => $certificateId,
+        ));
         if ($response === null) {
             $this->db->rollback();
 
@@ -168,12 +193,22 @@ class FvMdfeFocusService extends FvFocusGateway
 
         $this->db->begin();
 
+        $certificateId = (int) $mdfe->fk_certificate;
+        if ($certificateId <= 0 && !empty($this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE)) {
+            $certificateId = (int) $this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE;
+        }
+        if ($certificateId <= 0) {
+            return $this->failWith('FvFiscalCertificateMissing');
+        }
+        $mdfe->fk_certificate = $certificateId;
+
         $job = $this->createFocusJob($user, 'mdfe.close', array(
             'mdfe_id' => $mdfe->id,
             'identifier' => $identifier,
             'payload' => $payload,
         ), array(
             'fk_sefaz_profile' => $mdfe->fk_sefaz_profile,
+            'fk_certificate' => $certificateId,
         ));
         if (!$job) {
             $this->db->rollback();
@@ -181,7 +216,9 @@ class FvMdfeFocusService extends FvFocusGateway
             return -1;
         }
 
-        $response = $this->performFocusRequest('POST', 'mdfe/' . rawurlencode($identifier) . '/encerrar', $payload);
+        $response = $this->performFocusRequest('POST', 'mdfe/' . rawurlencode($identifier) . '/encerrar', $payload, array(
+            'fk_certificate' => $certificateId,
+        ));
         if ($response === null) {
             $this->db->rollback();
 

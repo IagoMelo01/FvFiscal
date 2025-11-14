@@ -57,6 +57,7 @@ require_once DOL_DOCUMENT_ROOT . '/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT . '/core/lib/files.lib.php';
 require_once '../lib/fvfiscal.lib.php';
 require_once '../class/FvSefazProfile.class.php';
+require_once '../class/FvCertificate.class.php';
 
 /**
  * @var DoliDB $db
@@ -77,9 +78,13 @@ $action = GETPOST('action', 'aZ09');
 $form = new Form($db);
 
 $profile = fvfiscal_fetch_active_sefaz_profile($db);
-$currentCertPassword = '';
-if (!empty($profile->certificate_password)) {
-    $currentCertPassword = fvfiscal_decrypt_value($profile->certificate_password);
+$defaultCertificateId = !empty($conf->global->FVFISCAL_DEFAULT_CERTIFICATE) ? (int) $conf->global->FVFISCAL_DEFAULT_CERTIFICATE : 0;
+$importCertificateId = !empty($conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID) ? (int) $conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID : 0;
+if ($defaultCertificateId <= 0 && (int) $profile->fk_certificate > 0) {
+    $defaultCertificateId = (int) $profile->fk_certificate;
+}
+if ($importCertificateId <= 0) {
+    $importCertificateId = $defaultCertificateId;
 }
 
 $currentFocusToken = '';
@@ -90,6 +95,31 @@ if (!empty($conf->global->FVFISCAL_FOCUS_TOKEN)) {
 $currentFocusEndpoint = !empty($conf->global->FVFISCAL_FOCUS_ENDPOINT) ? $conf->global->FVFISCAL_FOCUS_ENDPOINT : '';
 $scienceAuto = !empty($conf->global->FVFISCAL_IMPORT_SCIENCE_AUTO);
 $scienceInterval = !empty($conf->global->FVFISCAL_IMPORT_CRON_MIN) ? (int) $conf->global->FVFISCAL_IMPORT_CRON_MIN : 15;
+
+$certificateChoices = array(0 => $langs->trans('Select'));
+$certificateMetadata = array();
+$sqlCert = 'SELECT rowid, ref, label, certificate_expire_at, status FROM ' . MAIN_DB_PREFIX . "fv_certificate";
+$sqlCert .= ' WHERE entity IN (' . getEntity('fv_certificate') . ')';
+$sqlCert .= ' ORDER BY ref ASC';
+$resCert = $db->query($sqlCert);
+if ($resCert) {
+    while ($obj = $db->fetch_object($resCert)) {
+        $expiry = $db->jdate($obj->certificate_expire_at);
+        $label = $obj->ref;
+        if (!empty($obj->label)) {
+            $label .= ' - ' . $obj->label;
+        }
+        if ($expiry > 0) {
+            $label .= ' (' . $langs->trans('FvFiscalCertificateExpiresOn', dol_print_date($expiry, 'day', 'tzuser')) . ')';
+        }
+        if ((int) $obj->status === 0) {
+            $label .= ' [' . $langs->trans('Disabled') . ']';
+        }
+        $certificateChoices[(int) $obj->rowid] = $label;
+        $certificateMetadata[(int) $obj->rowid] = array('expiry' => $expiry, 'status' => (int) $obj->status);
+    }
+    $db->free($resCert);
+}
 
 $errors = array();
 $messages = array();
@@ -105,33 +135,17 @@ if ($action === 'save') {
     $sefazEnvironment = trim((string) GETPOST('sefaz_environment', 'alpha'));
     $taxRegime = trim((string) GETPOST('tax_regime', 'alpha'));
     $taxRegimeDetail = trim((string) GETPOST('tax_regime_detail', 'alpha'));
-    $certificatePasswordInput = GETPOST('certificate_password', 'restricthtml');
+    $defaultCertificateInput = (int) GETPOST('default_certificate_id', 'int');
+    $importCertificateInput = (int) GETPOST('import_certificate_id', 'int');
     $scienceAutoInput = GETPOST('science_auto', 'int');
     $scienceIntervalInput = (int) GETPOST('science_interval', 'int');
 
+    if ($importCertificateInput <= 0) {
+        $importCertificateInput = $defaultCertificateInput;
+    }
+
     if ($focusEndpoint === '' || !filter_var($focusEndpoint, FILTER_VALIDATE_URL)) {
         $errors[] = $langs->trans('FvFiscalErrorFocusEndpoint');
-    }
-
-    $focusTokenToStore = $currentFocusToken;
-    if (!empty($focusTokenInput)) {
-        $focusTokenToStore = $focusTokenInput;
-    } elseif (!empty($focusTokenClear)) {
-        $focusTokenToStore = '';
-    }
-
-    $certificatePasswordToUse = $currentCertPassword;
-    if ($certificatePasswordInput !== '') {
-        $certificatePasswordToUse = $certificatePasswordInput;
-    }
-
-    $certificateFile = $_FILES['certificate_file'] ?? null;
-    $hasUploadedCertificate = $certificateFile && !empty($certificateFile['tmp_name']);
-    $certificatePath = $profile->certificate_path;
-    $certificateExpiration = (int) $profile->certificate_expire_at;
-
-    if ($hasUploadedCertificate && $certificatePasswordToUse === '') {
-        $errors[] = $langs->trans('FvFiscalErrorCertificatePasswordRequired');
     }
 
     if (!empty($sefazEnvironment) && !in_array($sefazEnvironment, array('production', 'homologation'), true)) {
@@ -142,27 +156,28 @@ if ($action === 'save') {
         $scienceIntervalInput = 15;
     }
 
-    $certificateSourcePath = '';
-    if ($hasUploadedCertificate) {
-        $certificateSourcePath = $certificateFile['tmp_name'];
-    } elseif (!empty($certificatePath)) {
-        $certificateSourcePath = rtrim(DOL_DATA_ROOT, '/') . '/' . ltrim($certificatePath, '/');
+    $focusTokenToStore = $currentFocusToken;
+    if (!empty($focusTokenInput)) {
+        $focusTokenToStore = $focusTokenInput;
+    } elseif (!empty($focusTokenClear)) {
+        $focusTokenToStore = '';
     }
 
-    if (!$hasUploadedCertificate && empty($certificatePath)) {
-        $errors[] = $langs->trans('FvFiscalErrorCertificateRequired');
-    }
-
-    if ($certificateSourcePath !== '' && $certificatePasswordToUse !== '') {
-        $certificateInfo = fvfiscal_parse_certificate($certificateSourcePath, $certificatePasswordToUse);
-        if ($certificateInfo === null) {
-            $errors[] = $langs->trans('FvFiscalErrorCertificateInvalid');
-        } else {
-            $certificateExpiration = $certificateInfo['valid_to'];
-            $messages[] = $langs->trans('FvFiscalCertificateValidated', dol_print_date($certificateExpiration, 'dayhour', 'tzuser'));
+    foreach (array('default' => $defaultCertificateInput, 'import' => $importCertificateInput) as $key => $certificateId) {
+        if ($certificateId <= 0) {
+            continue;
         }
-    } elseif ($certificateSourcePath === '' && $certificatePasswordToUse !== '') {
-        $errors[] = $langs->trans('FvFiscalErrorCertificateMissing');
+        if (!isset($certificateMetadata[$certificateId])) {
+            $errors[] = $langs->trans('FvFiscalErrorCertificateSelection');
+            continue;
+        }
+        $meta = $certificateMetadata[$certificateId];
+        if (!empty($meta['expiry']) && $meta['expiry'] < dol_now()) {
+            $errors[] = $langs->trans('FvFiscalErrorCertificateExpired');
+        }
+        if ((int) $meta['status'] === 0) {
+            $errors[] = $langs->trans('FvFiscalErrorCertificateDisabled');
+        }
     }
 
     $focusStatusOk = false;
@@ -178,7 +193,6 @@ if ($action === 'save') {
     if (empty($errors)) {
         $db->begin();
 
-        $encryptedPassword = $certificatePasswordToUse !== '' ? fvfiscal_encrypt_value($certificatePasswordToUse) : '';
         $profile->entity = $conf->entity;
         $profile->status = 1;
         if (empty($profile->ref)) {
@@ -190,91 +204,66 @@ if ($action === 'save') {
         $profile->environment = $sefazEnvironment ?: 'production';
         $profile->tax_regime = $taxRegime;
         $profile->tax_regime_detail = $taxRegimeDetail;
-        if ($encryptedPassword !== '') {
-            $profile->certificate_password = $encryptedPassword;
-        }
-        if (!empty($certificateExpiration)) {
-            $profile->certificate_expire_at = $certificateExpiration;
-        }
+        $profile->fk_certificate = $defaultCertificateInput ?: null;
 
-        if ($hasUploadedCertificate) {
-            $targetRelativeDir = 'fiscal/certificates';
-            $targetDir = rtrim(DOL_DATA_ROOT, '/') . '/' . $targetRelativeDir;
-            dol_mkdir($targetDir);
-            $sanitizedName = dol_sanitizeFileName($certificateFile['name']);
-            if ($sanitizedName === '') {
-                $sanitizedName = 'sefaz-cert.pfx';
-            }
-            $extension = '.pfx';
-            if (preg_match('/\.(p12|pfx)$/i', $sanitizedName, $matches)) {
-                $extension = '.' . strtolower($matches[1]);
-            }
-            $baseName = preg_replace('/\.(p12|pfx)$/i', '', $sanitizedName);
-            if ($baseName === '') {
-                $baseName = 'sefaz-cert';
-            }
-            $timestampSuffix = dol_print_date(dol_now(), 'dayhourlog');
-            $targetFile = $baseName . '-' . $timestampSuffix . $extension;
-            $targetPath = $targetDir . '/' . $targetFile;
-            $uploadOk = false;
-            if (function_exists('dol_move_uploaded_file')) {
-                $uploadOk = (bool) dol_move_uploaded_file($certificateFile['tmp_name'], $targetDir . '/', $targetFile, 1);
-            }
-            if (!$uploadOk) {
-                $uploadOk = move_uploaded_file($certificateFile['tmp_name'], $targetPath);
-            }
-            if (!$uploadOk) {
-                $db->rollback();
-                $errors[] = $langs->trans('FvFiscalErrorCertificateMoveFailed');
-            } else {
-                $profile->certificate_path = $targetRelativeDir . '/' . $targetFile;
-                $messages[] = $langs->trans('FvFiscalCertificateStored', $profile->certificate_path);
-            }
+        if ($profile->id > 0) {
+            $result = $profile->update($user);
+        } else {
+            $result = $profile->create($user);
         }
 
-        if (empty($errors)) {
-            if ($profile->id > 0) {
-                $result = $profile->update($user);
+        if ($result <= 0) {
+            $db->rollback();
+            $errors[] = $profile->error ?: $langs->trans('Error');
+        } else {
+            $focusTokenEncrypted = $focusTokenToStore !== '' ? fvfiscal_encrypt_value($focusTokenToStore) : '';
+            if ($focusTokenEncrypted === '') {
+                dolibarr_del_const($db, 'FVFISCAL_FOCUS_TOKEN', $conf->entity);
+                unset($conf->global->FVFISCAL_FOCUS_TOKEN);
             } else {
-                $result = $profile->create($user);
+                dolibarr_set_const($db, 'FVFISCAL_FOCUS_TOKEN', $focusTokenEncrypted, 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_FOCUS_TOKEN = $focusTokenEncrypted;
             }
 
-            if ($result <= 0) {
-                $db->rollback();
-                $errors[] = $profile->error ?: $langs->trans('Error');
+            dolibarr_set_const($db, 'FVFISCAL_FOCUS_ENDPOINT', $focusEndpoint, 'chaine', 0, '', $conf->entity);
+            $conf->global->FVFISCAL_FOCUS_ENDPOINT = $focusEndpoint;
+
+            if ($defaultCertificateInput > 0) {
+                dolibarr_set_const($db, 'FVFISCAL_DEFAULT_CERTIFICATE', $defaultCertificateInput, 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_DEFAULT_CERTIFICATE = $defaultCertificateInput;
             } else {
-                $focusTokenEncrypted = $focusTokenToStore !== '' ? fvfiscal_encrypt_value($focusTokenToStore) : '';
-                if ($focusTokenEncrypted === '') {
-                    dolibarr_del_const($db, 'FVFISCAL_FOCUS_TOKEN', $conf->entity);
-                    unset($conf->global->FVFISCAL_FOCUS_TOKEN);
-                } else {
-                    dolibarr_set_const($db, 'FVFISCAL_FOCUS_TOKEN', $focusTokenEncrypted, 'chaine', 0, '', $conf->entity);
-                    $conf->global->FVFISCAL_FOCUS_TOKEN = $focusTokenEncrypted;
-                }
-
-                dolibarr_set_const($db, 'FVFISCAL_FOCUS_ENDPOINT', $focusEndpoint, 'chaine', 0, '', $conf->entity);
-                $conf->global->FVFISCAL_FOCUS_ENDPOINT = $focusEndpoint;
-
-                dolibarr_set_const($db, 'FVFISCAL_IMPORT_SCIENCE_AUTO', $scienceAutoInput ? '1' : '0', 'chaine', 0, '', $conf->entity);
-                $conf->global->FVFISCAL_IMPORT_SCIENCE_AUTO = $scienceAutoInput ? '1' : '';
-
-                dolibarr_set_const($db, 'FVFISCAL_IMPORT_CRON_MIN', $scienceIntervalInput, 'chaine', 0, '', $conf->entity);
-                $conf->global->FVFISCAL_IMPORT_CRON_MIN = $scienceIntervalInput;
-
-                $db->commit();
-
-                $messages[] = $langs->trans('FvFiscalSetupSaved');
-                if ($focusStatusOk) {
-                    $messages[] = $langs->trans('FvFiscalFocusStatusOk');
-                }
-
-                $profile = fvfiscal_fetch_active_sefaz_profile($db);
-                $currentCertPassword = $certificatePasswordToUse;
-                $currentFocusToken = $focusTokenToStore;
-                $currentFocusEndpoint = $focusEndpoint;
-                $scienceAuto = (bool) $scienceAutoInput;
-                $scienceInterval = $scienceIntervalInput;
+                dolibarr_del_const($db, 'FVFISCAL_DEFAULT_CERTIFICATE', $conf->entity);
+                unset($conf->global->FVFISCAL_DEFAULT_CERTIFICATE);
             }
+
+            if ($importCertificateInput > 0) {
+                dolibarr_set_const($db, 'FVFISCAL_IMPORT_CERTIFICATE_ID', $importCertificateInput, 'chaine', 0, '', $conf->entity);
+                $conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID = $importCertificateInput;
+            } else {
+                dolibarr_del_const($db, 'FVFISCAL_IMPORT_CERTIFICATE_ID', $conf->entity);
+                unset($conf->global->FVFISCAL_IMPORT_CERTIFICATE_ID);
+            }
+
+            dolibarr_set_const($db, 'FVFISCAL_IMPORT_SCIENCE_AUTO', $scienceAutoInput ? '1' : '0', 'chaine', 0, '', $conf->entity);
+            $conf->global->FVFISCAL_IMPORT_SCIENCE_AUTO = $scienceAutoInput ? '1' : '';
+
+            dolibarr_set_const($db, 'FVFISCAL_IMPORT_CRON_MIN', $scienceIntervalInput, 'chaine', 0, '', $conf->entity);
+            $conf->global->FVFISCAL_IMPORT_CRON_MIN = $scienceIntervalInput;
+
+            $db->commit();
+
+            $messages[] = $langs->trans('FvFiscalSetupSaved');
+            if ($focusStatusOk) {
+                $messages[] = $langs->trans('FvFiscalFocusStatusOk');
+            }
+
+            $profile = fvfiscal_fetch_active_sefaz_profile($db);
+            $currentFocusToken = $focusTokenToStore;
+            $currentFocusEndpoint = $focusEndpoint;
+            $scienceAuto = (bool) $scienceAutoInput;
+            $scienceInterval = $scienceIntervalInput;
+            $defaultCertificateId = $defaultCertificateInput;
+            $importCertificateId = $importCertificateInput;
         }
     }
 
@@ -293,6 +282,34 @@ print dol_get_fiche_head($head, 'settings', $langs->trans('FvFiscalSetup'));
 
 print load_fiche_titre($langs->trans('FvFiscalSetupPage'), '', 'title_setup');
 
+$certificateManageUrl = dol_buildpath('/fvfiscal/certificate_list.php', 1);
+
+$defaultCertificateInfo = '';
+if ($defaultCertificateId > 0 && isset($certificateMetadata[$defaultCertificateId])) {
+    $meta = $certificateMetadata[$defaultCertificateId];
+    if (!empty($meta['expiry'])) {
+        $defaultCertificateInfo .= $langs->trans('FvFiscalCertificateValidUntil', dol_print_date($meta['expiry'], 'day', 'tzuser'));
+    }
+    if ((int) $meta['status'] === 0) {
+        $defaultCertificateInfo .= ' - ' . $langs->trans('Disabled');
+    }
+} else {
+    $defaultCertificateInfo = $langs->trans('FvFiscalCertificateNotSelected');
+}
+
+$importCertificateInfo = '';
+if ($importCertificateId > 0 && isset($certificateMetadata[$importCertificateId])) {
+    $meta = $certificateMetadata[$importCertificateId];
+    if (!empty($meta['expiry'])) {
+        $importCertificateInfo .= $langs->trans('FvFiscalCertificateValidUntil', dol_print_date($meta['expiry'], 'day', 'tzuser'));
+    }
+    if ((int) $meta['status'] === 0) {
+        $importCertificateInfo .= ' - ' . $langs->trans('Disabled');
+    }
+} else {
+    $importCertificateInfo = $langs->trans('FvFiscalCertificateFallbackNotice');
+}
+
 print '<form method="POST" action="' . htmlspecialchars($_SERVER['PHP_SELF']) . '" enctype="multipart/form-data">';
 print '<input type="hidden" name="token" value="' . newToken() . '">';
 print '<input type="hidden" name="action" value="save">';
@@ -303,32 +320,24 @@ print '<table class="noborder centpercent">';
 print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalCertificateSection') . '</th></tr>';
 
 print '<tr class="oddeven">';
-print '<td>' . $langs->trans('FvFiscalCertificateUpload') . '</td>';
-print '<td><input type="file" name="certificate_file" accept=".pfx,.p12">';
-if (!empty($profile->certificate_path)) {
-    print '<br><span class="opacitymedium">' . dol_escape_htmltag($profile->certificate_path) . '</span>';
-}
-print '<div class="small opacitymedium">' . $langs->trans('FvFiscalCertificateSecurityNotice', 'documents/fiscal/') . '</div>';
-print '</td>';
+print '<td>' . $langs->trans('FvFiscalCertificateManage') . '</td>';
+print '<td>' . sprintf($langs->trans('FvFiscalCertificateManageHelp'), '<a href="' . htmlspecialchars($certificateManageUrl) . '" class="button">' . $langs->trans('FvFiscalOpenCertificateManager') . '</a>') . '</td>';
 print '</tr>';
 
 print '<tr class="oddeven">';
-print '<td>' . $langs->trans('FvFiscalCertificatePassword') . '</td>';
+print '<td>' . $langs->trans('FvFiscalDefaultCertificate') . '</td>';
 print '<td>';
-print '<input type="password" name="certificate_password" autocomplete="new-password" value="">';
-if ($currentCertPassword !== '') {
-    print '<div class="small opacitymedium">' . $langs->trans('FvFiscalCertificatePasswordHelp') . '</div>';
-}
+print $form->selectarray('default_certificate_id', $certificateChoices, $defaultCertificateId, 1);
+print '<div class="small opacitymedium">' . dol_escape_htmltag($defaultCertificateInfo) . '</div>';
 print '</td>';
 print '</tr>';
 
-$expirationValue = '';
-if (!empty($profile->certificate_expire_at)) {
-    $expirationValue = dol_print_date($profile->certificate_expire_at, 'dayhour', 'tzuser');
-}
 print '<tr class="oddeven">';
-print '<td>' . $langs->trans('FvFiscalCertificateExpiration') . '</td>';
-print '<td>' . ($expirationValue !== '' ? dol_escape_htmltag($expirationValue) : '<span class="opacitymedium">' . $langs->trans('Unknown') . '</span>') . '</td>';
+print '<td>' . $langs->trans('FvFiscalImportCertificate') . '</td>';
+print '<td>';
+print $form->selectarray('import_certificate_id', $certificateChoices, $importCertificateId, 1);
+print '<div class="small opacitymedium">' . dol_escape_htmltag($importCertificateInfo) . '</div>';
+print '</td>';
 print '</tr>';
 
 print '<tr class="liste_titre"><th colspan="2">' . $langs->trans('FvFiscalSefazSection') . '</th></tr>';
@@ -442,34 +451,6 @@ function fvfiscal_fetch_active_sefaz_profile($db)
  * @param string    $password
  * @return array{valid_to:int}|null
  */
-function fvfiscal_parse_certificate($path, $password)
-{
-    if (!function_exists('openssl_pkcs12_read')) {
-        return null;
-    }
-
-    $content = @file_get_contents($path);
-    if ($content === false) {
-        return null;
-    }
-
-    $certs = array();
-    if (!@openssl_pkcs12_read($content, $certs, $password)) {
-        return null;
-    }
-
-    if (empty($certs['cert'])) {
-        return null;
-    }
-
-    $info = openssl_x509_parse($certs['cert']);
-    if ($info === false || empty($info['validTo_time_t'])) {
-        return null;
-    }
-
-    return array('valid_to' => (int) $info['validTo_time_t']);
-}
-
 /**
  * Ping Focus API status endpoint.
  *

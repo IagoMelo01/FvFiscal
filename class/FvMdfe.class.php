@@ -38,6 +38,7 @@ class FvMdfe extends CommonObject
         'status' => array('type' => 'smallint', 'label' => 'Status', 'enabled' => 1, 'visible' => 1, 'position' => 10, 'default' => 0, 'notnull' => 1),
         'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'enabled' => 1, 'visible' => 1, 'index' => 1, 'position' => 15),
         'fk_sefaz_profile' => array('type' => 'integer', 'label' => 'SefazProfile', 'enabled' => 1, 'visible' => 1, 'position' => 20, 'foreignkey' => 'fv_sefaz_profile.rowid'),
+        'fk_certificate' => array('type' => 'integer', 'label' => 'Certificate', 'enabled' => 1, 'visible' => 0, 'position' => 21, 'foreignkey' => 'fv_certificate.rowid'),
         'fk_batch_export' => array('type' => 'integer', 'label' => 'BatchExport', 'enabled' => 1, 'visible' => 0, 'position' => 23, 'foreignkey' => 'fv_batch_export.rowid'),
         'fk_focus_job' => array('type' => 'integer', 'label' => 'FocusJob', 'enabled' => 1, 'visible' => 0, 'position' => 24, 'foreignkey' => 'fv_focus_job.rowid'),
         'issue_at' => array('type' => 'datetime', 'label' => 'DateIssue', 'enabled' => 1, 'visible' => 1, 'position' => 30),

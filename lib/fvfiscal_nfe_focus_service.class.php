@@ -20,7 +20,7 @@ class FvNfeFocusService extends FvFocusGateway
      * @param bool     $force
      * @return FvNfeOut|int
      */
-    public function submitDocument(FvNfeOut $document, $user, $force = false)
+    public function submitDocument(FvNfeOut $document, $user, $force = false, $certificateId = 0)
     {
         $this->resetErrors();
 
@@ -32,6 +32,17 @@ class FvNfeFocusService extends FvFocusGateway
         }
         if ((int) $document->fk_sefaz_profile <= 0) {
             return $this->failWith('FvFiscalNfeOutMissingSefazProfile');
+        }
+
+        $finalCertificate = (int) $certificateId;
+        if ($finalCertificate <= 0 && (int) $document->fk_certificate > 0) {
+            $finalCertificate = (int) $document->fk_certificate;
+        }
+        if ($finalCertificate <= 0 && !empty($this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE)) {
+            $finalCertificate = (int) $this->conf->global->FVFISCAL_DEFAULT_CERTIFICATE;
+        }
+        if ($finalCertificate <= 0) {
+            return $this->failWith('FvFiscalCertificateMissing');
         }
 
         $payload = $this->buildCreatePayload($document);
@@ -46,6 +57,7 @@ class FvNfeFocusService extends FvFocusGateway
             'payload' => $payload,
         ), array(
             'fk_sefaz_profile' => $document->fk_sefaz_profile,
+            'fk_certificate' => $finalCertificate,
         ));
         if (!$job) {
             $this->db->rollback();
@@ -53,7 +65,9 @@ class FvNfeFocusService extends FvFocusGateway
             return -1;
         }
 
-        $response = $this->performFocusRequest('POST', 'nfe', $payload);
+        $response = $this->performFocusRequest('POST', 'nfe', $payload, array(
+            'fk_certificate' => $finalCertificate,
+        ));
         if ($response === null) {
             $this->db->rollback();
 
@@ -62,6 +76,7 @@ class FvNfeFocusService extends FvFocusGateway
 
         $this->applyResponseToNfe($document, $response);
         $document->fk_focus_job = $job->id;
+        $document->fk_certificate = $finalCertificate;
         $document->status = $this->mapRemoteStatus($response['status'] ?? ($response['situacao'] ?? null), FvNfeOut::STATUS_PROCESSING);
 
         $payloadJson = $this->encodeJson($payload);
