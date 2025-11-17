@@ -32,6 +32,15 @@ final class FvFiscalPermissions
     /** ACL suffix that grants write access to Focus batch data. */
     public const BATCH_WRITE = 'write';
 
+    /** Permission prefix for browsing certificates. */
+    public const CERTIFICATE = 'certificate';
+
+    /** ACL suffix that grants read-only access to certificate data. */
+    public const CERTIFICATE_READ = 'read';
+
+    /** ACL suffix that grants write access to certificate data. */
+    public const CERTIFICATE_WRITE = 'write';
+
     private function __construct()
     {
         // Prevent instantiation.

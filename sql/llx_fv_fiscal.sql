@@ -208,16 +208,16 @@ CREATE TABLE llx_fv_batch_export (
 ) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_nfe_out (
-    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    rowid BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity INTEGER NOT NULL DEFAULT 1,
     status SMALLINT NOT NULL DEFAULT 0,
     ref VARCHAR(128),
     ref_ext VARCHAR(128),
     fk_soc INTEGER NOT NULL,
     fk_project INTEGER,
-    fk_sefaz_profile INTEGER NOT NULL,
-    fk_batch_export INTEGER,
-    fk_focus_job INTEGER,
+    fk_sefaz_profile BIGINT NOT NULL,
+    fk_batch_export BIGINT,
+    fk_focus_job BIGINT,
     doc_type VARCHAR(32) NOT NULL DEFAULT 'nfe',
     operation_type VARCHAR(32) DEFAULT 'sale',
     issue_at DATETIME,
@@ -248,12 +248,12 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_out (
     FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
     FOREIGN KEY(fk_batch_export) REFERENCES llx_fv_batch_export(rowid),
     FOREIGN KEY(fk_focus_job) REFERENCES llx_fv_focus_job(rowid)
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_nfe_out_line (
-    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    rowid BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity INTEGER NOT NULL DEFAULT 1,
-    fk_nfeout INTEGER NOT NULL,
+    fk_nfeout BIGINT NOT NULL,
     fk_product INTEGER,
     fk_unit INTEGER,
     rang INTEGER,
@@ -282,13 +282,13 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_out_line (
     created_at DATETIME,
     fk_user_create INTEGER,
     FOREIGN KEY(fk_nfeout) REFERENCES llx_fv_nfe_out(rowid) ON DELETE CASCADE
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_nfe_event (
-    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    rowid BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity INTEGER NOT NULL DEFAULT 1,
     status SMALLINT NOT NULL DEFAULT 0,
-    fk_nfeout INTEGER NOT NULL,
+    fk_nfeout BIGINT NOT NULL,
     event_type VARCHAR(32) NOT NULL,
     event_sequence INTEGER DEFAULT 1,
     protocol_number VARCHAR(64),
@@ -300,7 +300,7 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_event (
     created_at DATETIME,
     fk_user_create INTEGER,
     FOREIGN KEY(fk_nfeout) REFERENCES llx_fv_nfe_out(rowid) ON DELETE CASCADE
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_nfe_in (
     rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
@@ -328,16 +328,16 @@ CREATE TABLE IF NOT EXISTS llx_fv_nfe_in (
     fk_user_create INTEGER,
     fk_user_modif INTEGER,
     UNIQUE(entity, nfe_key)
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
-    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    rowid BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity INTEGER NOT NULL DEFAULT 1,
     status SMALLINT NOT NULL DEFAULT 0,
     ref VARCHAR(128),
-    fk_sefaz_profile INTEGER,
-    fk_batch_export INTEGER,
-    fk_focus_job INTEGER,
+    fk_sefaz_profile BIGINT,
+    fk_batch_export BIGINT,
+    fk_focus_job BIGINT,
     issue_at DATETIME,
     mdfe_key VARCHAR(60),
     protocol_number VARCHAR(64),
@@ -367,24 +367,24 @@ CREATE TABLE IF NOT EXISTS llx_fv_mdfe (
     FOREIGN KEY(fk_sefaz_profile) REFERENCES llx_fv_sefaz_profile(rowid),
     FOREIGN KEY(fk_batch_export) REFERENCES llx_fv_batch_export(rowid),
     FOREIGN KEY(fk_focus_job) REFERENCES llx_fv_focus_job(rowid)
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS llx_fv_mdfe_nfe (
-    rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
-    fk_mdfe INTEGER NOT NULL,
-    fk_nfeout INTEGER NOT NULL,
+    rowid BIGINT AUTO_INCREMENT PRIMARY KEY,
+    fk_mdfe BIGINT NOT NULL,
+    fk_nfeout BIGINT NOT NULL,
     created_at DATETIME,
     UNIQUE unique_fv_mdfe_nfe (fk_mdfe, fk_nfeout),
     INDEX idx_fv_mdfe_nfe_mdfe (fk_mdfe),
     INDEX idx_fv_mdfe_nfe_nfe (fk_nfeout),
     FOREIGN KEY(fk_mdfe) REFERENCES llx_fv_mdfe(rowid),
     FOREIGN KEY(fk_nfeout) REFERENCES llx_fv_nfe_out(rowid)
-);
+) ENGINE=innodb DEFAULT CHARSET=utf8mb4;
 
-CREATE INDEX IF NOT EXISTS idx_fv_nfe_out_fk_soc ON llx_fv_nfe_out(fk_soc);
-CREATE INDEX IF NOT EXISTS idx_fv_nfe_out_fk_profile ON llx_fv_nfe_out(fk_sefaz_profile);
-CREATE INDEX IF NOT EXISTS idx_fv_nfe_out_line_fk ON llx_fv_nfe_out_line(fk_nfeout);
-CREATE INDEX IF NOT EXISTS idx_fv_nfe_in_fk_soc ON llx_fv_nfe_in(fk_soc);
-CREATE INDEX IF NOT EXISTS idx_fv_nfe_event_fk ON llx_fv_nfe_event(fk_nfeout);
-CREATE INDEX IF NOT EXISTS idx_fv_mdfe_fk_profile ON llx_fv_mdfe(fk_sefaz_profile);
-CREATE INDEX IF NOT EXISTS idx_fv_focus_job_profile ON llx_fv_focus_job(fk_sefaz_profile);
+CREATE INDEX idx_fv_nfe_out_fk_soc ON llx_fv_nfe_out(fk_soc);
+CREATE INDEX idx_fv_nfe_out_fk_profile ON llx_fv_nfe_out(fk_sefaz_profile);
+CREATE INDEX idx_fv_nfe_out_line_fk ON llx_fv_nfe_out_line(fk_nfeout);
+CREATE INDEX idx_fv_nfe_in_fk_soc ON llx_fv_nfe_in(fk_soc);
+CREATE INDEX idx_fv_nfe_event_fk ON llx_fv_nfe_event(fk_nfeout);
+CREATE INDEX idx_fv_mdfe_fk_profile ON llx_fv_mdfe(fk_sefaz_profile);
+CREATE INDEX idx_fv_focus_job_profile ON llx_fv_focus_job(fk_sefaz_profile);

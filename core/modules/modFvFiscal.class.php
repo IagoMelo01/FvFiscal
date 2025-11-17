@@ -306,6 +306,20 @@ class modFvFiscal extends DolibarrModules
                $this->rights[$r][5] = FvFiscalPermissions::BATCH_WRITE;
                $r++;
 
+               $o = 2;
+
+               $this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 1);
+               $this->rights[$r][1] = 'Read certificates';
+               $this->rights[$r][4] = FvFiscalPermissions::CERTIFICATE;
+               $this->rights[$r][5] = FvFiscalPermissions::CERTIFICATE_READ;
+               $r++;
+
+               $this->rights[$r][0] = $this->numero . sprintf("%02d", ($o * 10) + 2);
+               $this->rights[$r][1] = 'Manage certificates';
+               $this->rights[$r][4] = FvFiscalPermissions::CERTIFICATE;
+               $this->rights[$r][5] = FvFiscalPermissions::CERTIFICATE_WRITE;
+               $r++;
+
 
 		// Main menu entries to add
 		$this->menu = array();
@@ -357,6 +371,38 @@ class modFvFiscal extends DolibarrModules
                                 'position' => 1000 + $r,
                                 'enabled' => 'isModEnabled("fvfiscal")',
                                 'perms' => $menuPermission,
+                                'target' => '',
+                                'user' => 2,
+                );
+
+                $this->menu[$r++] = array(
+                                'fk_menu' => 'fk_mainmenu=fvfiscal',
+                                'type' => 'left',
+                                'titre' => 'FvFiscalCertificateMenu',
+                                'prefix' => img_picto('', 'fa-id-card', 'class="pictofixedwidth valignmiddle paddingright"'),
+                                'mainmenu' => 'fvfiscal',
+                                'leftmenu' => 'fvfiscal_certificate',
+                                'url' => '/fvfiscal/certificate_list.php',
+                                'langs' => 'fvfiscal@fvfiscal',
+                                'position' => 1000 + $r,
+                                'enabled' => 'isModEnabled("fvfiscal")',
+                                'perms' => '$user->hasRight(\'fvfiscal\', \'certificate\', \'read\')',
+                                'target' => '',
+                                'user' => 2,
+                );
+
+                $this->menu[$r++] = array(
+                                'fk_menu' => 'fk_mainmenu=fvfiscal',
+                                'type' => 'left',
+                                'titre' => 'FvFiscalConfigMenu',
+                                'prefix' => img_picto('', 'fa-cogs', 'class="pictofixedwidth valignmiddle paddingright"'),
+                                'mainmenu' => 'fvfiscal',
+                                'leftmenu' => 'fvfiscal_config',
+                                'url' => '/fvfiscal/admin/setup.php',
+                                'langs' => 'fvfiscal@fvfiscal',
+                                'position' => 1000 + $r,
+                                'enabled' => 'isModEnabled("fvfiscal")',
+                                'perms' => '$user->admin',
                                 'target' => '',
                                 'user' => 2,
                 );
